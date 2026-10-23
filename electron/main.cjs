@@ -127,7 +127,16 @@ function blenderPath() {
 }
 
 // Kör bryggskriptet i bakgrunden och returnerar texten efter ALEX_OK.
-function runBridge(args, { background = true, onLine } = {}) {
+// Bara en Blender i taget i bakgrunden – flera samtidiga kan krocka med Blenders inställningsfil.
+let blenderQueue = Promise.resolve()
+function runBridge(args, opts = {}) {
+  if (opts.background === false) return runBridgeNow(args, opts)
+  const run = blenderQueue.then(() => runBridgeNow(args, opts))
+  blenderQueue = run.catch(() => {})
+  return run
+}
+
+function runBridgeNow(args, { background = true, onLine } = {}) {
   return new Promise((resolve, reject) => {
     const exe = blenderPath()
     if (!exe) return reject(new Error('Hittar inte Blender. Välj blender.exe under Inställningar.'))

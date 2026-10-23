@@ -15,6 +15,13 @@ import addon_utils
 import bpy
 
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+
+# Bakgrundskörningar får aldrig skriva över användarens Blender-inställningar.
+if bpy.app.background:
+    try:
+        bpy.context.preferences.use_preferences_save = False
+    except Exception:
+        pass
 NATIVE = {"use_custom_settings": True, "target_formats": {"NATIVE"}, "target_versions": {"GEN8"}}
 # Klädmodeller exporteras utan eget skelett – de använder freemode-gubbens (.yft) in game.
 PED_EXPORT = {**NATIVE, "exclude_skeleton": True}
@@ -28,15 +35,33 @@ def err(msg):
     print(f"ALEX_ERR {msg}", flush=True)
 
 
-def enable_sollumz():
-    for mod in addon_utils.modules():
-        if "sollumz" in mod.__name__.lower():
-            addon_utils.enable(mod.__name__, default_set=False)
-            break
+def sollumz_ready():
     try:
         bpy.ops.sollumz.import_assets.get_rna_type()
     except Exception:
+        return False
+    # Sollumz registrerar sina egna egenskaper på objekt – saknas de har tillägget bara startat till hälften.
+    return hasattr(bpy.types.Object, "sollum_type")
+
+
+def enable_sollumz():
+    """Slår på Sollumz även om det är avstängt i Blenders inställningar.
+    default_set=True krävs: Sollumz läser sina inställningar ur preferences.addons när det startar,
+    och utan den posten startar det bara till hälften (KeyError 'Sollumz' / saknad sollum_type)."""
+    if sollumz_ready():
+        return
+    mods = [m for m in addon_utils.modules() if "sollumz" in m.__name__.lower()]
+    if not mods:
         raise RuntimeError("Sollumz är inte installerat i Blender. Installera det från github.com/Sollumz/Sollumz.")
+    name = mods[0].__name__
+    # Stäng av en halvstartad version först, annars registreras inget på nytt.
+    try:
+        addon_utils.disable(name, default_set=False)
+    except Exception:
+        pass
+    addon_utils.enable(name, default_set=True, handle_error=lambda e: traceback.print_exc())
+    if not sollumz_ready():
+        raise RuntimeError("Sollumz kunde inte startas i Blender. Öppna Blender › Edit › Preferences › Add-ons och slå på Sollumz, eller installera om det.")
 
 
 def clear_scene():

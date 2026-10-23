@@ -2,7 +2,7 @@
   "name": "alex-clothes",
   "productName": "alex_clothes",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"vite --port 5178 --strictPort --open false\" \"wait-on tcp:5178 && electron .\"",

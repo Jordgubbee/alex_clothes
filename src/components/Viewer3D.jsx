@@ -267,7 +267,7 @@ export default function Viewer3D() {
   return (
     <div className="relative h-full min-h-0 bg-ink-950">
       <div ref={mountRef} className="absolute inset-0" />
-      <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+      <div className="absolute left-3 right-3 top-3 flex flex-wrap gap-1.5">
         <Toggle on={showBody} set={setShowBody}>{t('Kropp')}</Toggle>
         <Toggle on={!onlySelected} set={(on) => setOnlySelected(!on)}>{t('Visa hela outfiten')}</Toggle>
         <Toggle on={wire} set={setWire}>{t('Trådnät')}</Toggle>
@@ -278,7 +278,7 @@ export default function Viewer3D() {
           <option value="natt">{t('Ljus: natt')}</option>
         </select>
       </div>
-      <div className="absolute right-3 top-3 flex gap-1">
+      <div className="absolute bottom-3 right-3 flex flex-wrap justify-end gap-1">
         <Button size="sm" onClick={() => camTo(0)}>{t('Fram')}</Button>
         <Button size="sm" onClick={() => camTo(Math.PI / 2)}>{t('Sida')}</Button>
         <Button size="sm" onClick={() => camTo(Math.PI)}>{t('Bak')}</Button>
@@ -286,7 +286,7 @@ export default function Viewer3D() {
         <Button size="sm" title={t('Zooma på fötterna')} onClick={() => camTo(0, 0.4, 0.2, 1.3)}>{t('Fötter')}</Button>
         <Button size="sm" title={t('Spara bild')} onClick={screenshot}>{t('Bild')}</Button>
       </div>
-      {pedBusy && <div className="absolute bottom-3 right-3 rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-xs text-ink-300">{pedBusy}</div>}
+      {pedBusy && <div className="absolute right-3 top-12 rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-xs text-ink-300">{pedBusy}</div>}
       {!basePed[gender] && !pedBusy && (
         <div className="absolute bottom-3 left-3 max-w-sm rounded-md border border-ink-700 bg-ink-900/95 p-3 text-xs leading-relaxed text-ink-300">
           <p className="mb-1 font-medium text-ink-100">{t('Använd GTA:s riktiga {p}', { p: gender === 'male' ? 'mp_m_freemode_01' : 'mp_f_freemode_01' })}</p>

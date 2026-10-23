@@ -84,12 +84,11 @@ export default function SettingsDialog() {
           </div>
 
           <div>
-            <h3 className="mb-2 text-xs font-semibold text-ink-200">{t('GTA V och CodeWalker')}</h3>
+            <h3 className="mb-2 text-xs font-semibold text-ink-200">GTA V</h3>
             <div className="rounded-md border border-ink-800 bg-ink-950 p-3 text-xs">
               <PathRow label="GTA V" value={settings?.gtaPath} onPick={() => pick('gtaPath')} />
-              <PathRow label="CodeWalker" value={settings?.codewalkerBundled ? t('Inbyggd (följer med appen)') : settings?.codewalkerPath} onPick={() => pick('codewalkerPath')} />
             </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-ink-500">{t('CodeWalker följer med appen och används för att läsa freemode-gubbarna ur spelet och bygga .ymt-filer. Filerna stannar på din dator.')}</p>
+            <p className="mt-2 text-[11px] leading-relaxed text-ink-500">{t('Appen läser freemode-gubbarna direkt ur ditt spel och bygger .ymt-filerna själv. Inget extra program behövs, och filerna stannar på din dator.')}</p>
           </div>
 
           <div>

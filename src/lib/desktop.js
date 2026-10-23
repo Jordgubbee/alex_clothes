@@ -41,12 +41,18 @@ export async function previewMany(itemIds) {
 
 export const previewFromYdd = (itemId) => previewMany([itemId])
 
-export async function loadSavedPeds() {
+// Laddar sparade gubbar. Finns inga än hämtas de automatiskt ur GTA – de ska alltid finnas.
+export async function loadSavedPeds(blender) {
   if (!desktop) return
+  let missing = false
   for (const g of ['male', 'female']) {
     const ped = await desktop.getPed(g)
     if (ped) await applyPed(g, ped)
+    else missing = true
   }
+  if (!missing || !blender?.ok) return
+  const settings = await desktop.getSettings()
+  if (settings.gtaPath) await pedsFromGta()
 }
 
 async function applyPed(gender, ped) {
@@ -80,7 +86,7 @@ export async function importPedFromGta(gender, files) {
 // Plockar ut båda freemode-gubbarna ur spelet (via CodeWalker) och bygger dem med Sollumz.
 export async function pedsFromGta() {
   const st = useStore.getState()
-  st.setPedBusy(t('Läser GTA V med CodeWalker…'))
+  st.setPedBusy(t('Läser GTA V…'))
   const off = desktop.onPedProgress((t) => useStore.getState().setPedBusy(t))
   try {
     const done = await desktop.pedsFromGta()

@@ -47,7 +47,9 @@ def clear_scene():
             block.remove(item)
 
 
-def import_files(paths):
+def import_files(paths, tolerant=False):
+    """tolerant=True: filer som inte går att läsa hoppas över (returneras), resten läses in ändå."""
+    failed = []
     for p in paths:
         # Först med freemode-skelettet (rätt viktning). Props och annat som inte är viktat mot
         # hela skelettet klarar inte det – då läses filen in utan skelett.
@@ -69,7 +71,12 @@ def import_files(paths):
             for o in new:
                 bpy.data.objects.remove(o)
         else:
-            raise RuntimeError(f"Sollumz kunde inte läsa {os.path.basename(p)}")
+            if not tolerant:
+                raise RuntimeError(f"Sollumz kunde inte läsa {os.path.basename(p)}")
+            failed.append(os.path.basename(p))
+    if tolerant and len(failed) == len(paths):
+        raise RuntimeError("Sollumz kunde inte läsa någon av filerna: " + ", ".join(failed))
+    return failed
 
 
 def hide_helpers():
@@ -82,8 +89,12 @@ def hide_helpers():
 
 
 def cmd_convert(out, inputs):
+    import json
     clear_scene()
-    import_files(inputs)
+    # En gubbe består av flera delar – om en del inte går att läsa visas resten ändå.
+    skipped = import_files(inputs, tolerant=True)
+    if skipped:
+        print("ALEX_INFO " + json.dumps({"skipped": skipped}), flush=True)
     hide_helpers()
     bpy.ops.export_scene.gltf(
         filepath=out,

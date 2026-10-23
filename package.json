@@ -90,9 +90,14 @@
     },
     "extraResources": [
       {
-        "from": "vendor/codewalker",
-        "to": "codewalker"
+        "from": "vendor/gtareader",
+        "to": "gtareader"
       }
     ]
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jordgubbee/alex_clothes.git"
+  },
+  "homepage": "https://github.com/Jordgubbee/alex_clothes"
 }

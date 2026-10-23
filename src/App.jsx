@@ -47,8 +47,10 @@ export default function App() {
 
   useEffect(() => {
     if (!desktop) return
-    desktop.checkBlender().then(setBlender)
-    loadSavedPeds()
+    desktop.checkBlender().then((b) => {
+      setBlender(b)
+      loadSavedPeds(b)
+    })
     return desktop.onEdited(({ itemId, name, data, error }) => {
       if (error) return notify(error, 'error')
       useStore.getState().updateItem(itemId, { ydd: new File([data], name) })

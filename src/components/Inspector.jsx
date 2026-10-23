@@ -344,7 +344,7 @@ function IconBtn({ name, title, onClick }) {
 function Guide() {
   const t = useT()
   const steps = [
-    [t('Hämta gubbarna'), t('Klicka Hämta från mitt GTA i 3D-vyn. Freemode-gubbarna läses in med originalskelettet.')],
+    [t('Hämta gubbarna'), t('Gubbarna hämtas automatiskt ur ditt GTA V första gången appen startar, med originalskelettet.')],
     [t('Dra in kläder'), t('Släpp .ydd/.ytd-filer eller hela mappar i listan till vänster. Kategori, kön och paket läses av filnamnen.')],
     [t('Dela upp i paket'), t('Skapa paket (t.ex. polis, ambulans) och ge dem egna namn för kille och tjej.')],
     [t('Redigera'), t('Ta bort loggor, måla, lägg till text, nya färgvarianter eller slå ihop texturer.')],

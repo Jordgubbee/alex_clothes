@@ -15,7 +15,7 @@ const BRIDGE = path.join(__dirname, 'blender_bridge.py').replace('app.asar', 'ap
 const EXTRACT = path.join(__dirname, 'extract_freemode.ps1').replace('app.asar', 'app.asar.unpacked')
 const BUILD_YMT = path.join(__dirname, 'build_ymt.ps1').replace('app.asar', 'app.asar.unpacked')
 // CodeWalker.Core (MIT) följer med appen, så användaren behöver inte installera CodeWalker.
-const BUNDLED_CW = isDev ? path.join(__dirname, '..', 'vendor', 'codewalker') : path.join(process.resourcesPath, 'codewalker')
+const BUNDLED_CW = isDev ? path.join(__dirname, '..', 'vendor', 'gtareader') : path.join(process.resourcesPath, 'gtareader')
 const PED_MODELS = { male: 'mp_m_freemode_01', female: 'mp_f_freemode_01' }
 
 for (const d of [CACHE, PEDS]) fs.mkdirSync(d, { recursive: true })
@@ -148,6 +148,12 @@ function runBridge(args, { background = true, onLine } = {}) {
     p.stderr.on('data', (d) => (out += d))
     p.on('error', reject)
     p.on('close', () => {
+      // Hela utskriften sparas så att fel går att felsöka i efterhand.
+      try {
+        fs.writeFileSync(path.join(DATA, 'blender-last.log'), `${argv.join(' ')}\n\n${out}`)
+      } catch {
+        // Loggen är bara ett hjälpmedel.
+      }
       const okm = out.match(/ALEX_OK ?(.*)/)
       const errm = out.match(/ALEX_ERR (.*)/)
       if (okm) resolve(okm[1].trim())
@@ -179,7 +185,9 @@ async function convert(files) {
     const { dir, paths } = writeTemp(files)
     try {
       // .yft används bara som skelett; den ska inte importeras som modell.
-      await runBridge(['convert', out, ...paths.filter((p) => !p.toLowerCase().endsWith('.yft'))])
+      const args = ['convert', out, ...paths.filter((p) => !p.toLowerCase().endsWith('.yft'))]
+      // En ny körning om Blender krånglar en gång (t.ex. om en annan Blender höll på samtidigt).
+      await runBridge(args).catch(() => runBridge(args))
     } finally {
       fs.rmSync(dir, { recursive: true, force: true })
     }

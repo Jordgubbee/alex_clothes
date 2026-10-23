@@ -1,0 +1,14 @@
+alex_clothes
+Copyright (c) 2026 alex
+
+Programmet är gratis att använda. / The program is free to use.
+
+alex_clothes innehåller CodeWalker.Core (c) dexyfex, MIT License,
+https://github.com/dexyfex/CodeWalker – se codewalker/Notice.txt.
+
+alex_clothes innehåller inga filer från Rockstar Games. GTA V-filer
+läses bara från användarens egen installation.
+alex_clothes contains no Rockstar Games files. GTA V files are read
+only from the user's own installation.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.

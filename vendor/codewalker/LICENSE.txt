@@ -1,0 +1,2 @@
+CodeWalker.Core (c) dexyfex – MIT License. https://github.com/dexyfex/CodeWalker
+Se Notice.txt för fullständiga licenser.

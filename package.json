@@ -1,0 +1,98 @@
+{
+  "name": "alex-clothes",
+  "productName": "alex_clothes",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite --port 5178 --strictPort --open false\" \"wait-on tcp:5178 && electron .\"",
+    "dev:web": "vite",
+    "build": "node scripts/check-i18n.mjs && vite build",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder --win --publish never",
+    "release": "npm run build && electron-builder --win --publish always -c.publish.provider=github"
+  },
+  "dependencies": {
+    "jszip": "3.10.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "three": "0.169.0",
+    "zustand": "4.5.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.3.4",
+    "autoprefixer": "10.4.20",
+    "concurrently": "^9.1.0",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "postcss": "8.4.49",
+    "tailwindcss": "3.4.17",
+    "vite": "5.4.11",
+    "wait-on": "^8.0.1"
+  },
+  "description": "Enkelt klädverktyg för FiveM – redigera GTA V-kläder i 2D och 3D",
+  "author": "alex",
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "se.alex.clothes",
+    "productName": "alex_clothes",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "electron/*.py",
+      "electron/*.ps1"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "alex_clothes-Setup-${version}.${ext}",
+      "perMachine": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "alex_clothes",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "license": "build/license.txt",
+      "installerLanguages": [
+        "sv_SE",
+        "nb_NO",
+        "da_DK",
+        "fi_FI",
+        "en_US"
+      ],
+      "multiLanguageInstaller": true
+    },
+    "portable": {
+      "artifactName": "alex_clothes-${version}-portable.${ext}"
+    },
+    "extraResources": [
+      {
+        "from": "vendor/codewalker",
+        "to": "codewalker"
+      }
+    ]
+  }
+}

@@ -120,7 +120,7 @@ export const cleanError = (e) => String(e?.message || e).replace(/^Error invokin
 // "jbib_diff_005_b_uni" och "jbib_diff_005_a_uni" är samma textur i olika färger.
 export const texFamily = (name) => texKey(name).replace(/_diff_(\d{3})_[a-z](_|$)/, '_diff_$1_*$2')
 
-export const texKey = (name) => String(name || '').toLowerCase().split('^').pop().replace(/\.(dds|png|tga|ytd)$/, '').split('.')[0]
+export const texKey = (name) => String(name || '').toLowerCase().split('^').pop().replace(/\.(dds|png|tga|ytd)$/, '').split('.')[0].replace(/__decal$/, '')
 
 // Texturer som finns inbäddade i 3D-förhandsvisningen, per materialnamn.
 export async function embeddedTextures(file) {

@@ -163,6 +163,7 @@ export default function Viewer3D() {
           if (!m.isMesh) return
           const canvas = byName.get(texKey(m.material?.name || ''))
           const map = canvas ? new THREE.CanvasTexture(canvas) : m.material?.map || null
+          if (map) map.wrapS = map.wrapT = THREE.RepeatWrapping
           if (map) {
             map.colorSpace = THREE.SRGBColorSpace
             map.flipY = canvas ? !fromGta : map.flipY
@@ -324,6 +325,8 @@ function canvasMap(c, entry, item, tex) {
   if (!map || map.image !== tex.canvas || map.userData.size !== size) {
     map?.dispose()
     map = new THREE.CanvasTexture(tex.canvas)
+    // GTA-plagg har ofta UV förskjutna en hel textur (t.ex. v = 1–2). Upprepa som spelet gör, annars blir allt kantfärgen.
+    map.wrapS = map.wrapT = THREE.RepeatWrapping
     map.userData.size = size
     map.colorSpace = THREE.SRGBColorSpace
     map.anisotropy = 8
@@ -350,7 +353,12 @@ function applyTexture(c, entry, item, selectedTexId, wire) {
       // Kom ihåg modellens egen textur – plagg med flera texturer visar rätt textur på varje del.
       m.userData.key = texKey(m.material?.name)
       m.userData.origMap = m.material?.map || null
-      m.material = new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide, alphaTest: 0.35 })
+      const decal = /__decal/.test(m.material?.name || '')
+      // Dekaler (märken, tryck) ligger exakt på tyget – rita dem ovanpå och halvgenomskinliga, som GTA.
+      m.material = decal
+        ? new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 })
+        : new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide, alphaTest: 0.35 })
+      if (decal) m.renderOrder = 2
       m.userData.ownMat = true
     }
     let use = map

@@ -104,13 +104,31 @@ def import_files(paths, tolerant=False):
     return failed
 
 
+LOW_LODS = {"sollumz_medium", "sollumz_low", "sollumz_very_low"}
+
+
 def hide_helpers():
-    # Kollisioner, LOD:er och liknande ska inte synas i förhandsvisningen.
+    """Förhandsvisningen ska visa plagget som i spelet på nära håll: bara högsta LOD:en, inga kollisioner.
+    Lägre LOD:er ligger annars exakt ovanpå och döljer t.ex. tryck och märken."""
     for obj in list(bpy.data.objects):
+        if obj.type != "MESH":
+            continue
         st = getattr(obj, "sollum_type", "")
+        lods = getattr(obj, "sz_lods", None)
+        level = getattr(lods, "active_lod_level", "") if lods else ""
         name = obj.name.lower()
-        if obj.type == "MESH" and (st.startswith("sollumz_bound") or "_med" in name or "_low" in name or "_vlow" in name):
+        if st.startswith("sollumz_bound") or level in LOW_LODS or "_med" in name or "_low" in name or "_vlow" in name:
             bpy.data.objects.remove(obj)
+    mark_decals()
+
+
+def mark_decals():
+    """Dekaler (märken, tryck) är tunna ytor som ligger exakt på tyget. GTA ritar dem ovanpå;
+    materialnamnet får __decal så att 3D-vyn kan göra likadant."""
+    for mat in bpy.data.materials:
+        shader = getattr(getattr(mat, "shader_properties", None), "name", "") or ""
+        if "decal" in shader.lower() and "__decal" not in mat.name:
+            mat.name = mat.name.split(".")[0] + "__decal"
 
 
 def cmd_convert(out, inputs):

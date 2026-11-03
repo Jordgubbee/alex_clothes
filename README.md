@@ -10,7 +10,7 @@ Språk: Swedish, Norwegian, Danish, Finnish, English.
 
 ## Ladda ner
 
-**[⬇ alex_clothes-Setup (installation)](https://github.com/Jordgubbee/alex_clothes/releases/latest)** – välj  under *Assets*.
+**[⬇ alex_clothes-Setup (installation)](https://github.com/Jordgubbee/alex_clothes/releases/latest)** – välj `alex_clothes-Setup-x.x.x.exe` (eller `.zip`) under *Assets*.
 
 Blockerar webbläsaren filen? Ladda ner **.zip**-versionen i stället och packa upp den, eller:
 - **Edge:** klicka på ··· vid nedladdningen › *Behåll* › *Visa mer* › *Behåll ändå*.

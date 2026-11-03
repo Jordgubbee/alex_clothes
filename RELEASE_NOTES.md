@@ -23,6 +23,10 @@ Appen är inte signerad med ett köpt certifikat.
 - **Edge**: ··· vid nedladdningen › Behåll › Visa mer › Behåll ändå. **Chrome**: Ctrl+J › Behåll farlig fil.
 - **Smart App Control** (Windows 11) kan stoppa osignerade program helt. Använd då den portabla versionen eller stäng av Smart App Control under Windows-säkerhet › App- och webbläsarkontroll.
 
+### Nytt i 1.0.7
+- **Dölj pedens delar** – dubbelklicka på ansiktet (eller överkropp, ben, fötter) för att dölja det, eller använd menyn **Kroppsdelar** i 3D-vyn. **Visa alla** tar tillbaka allt
+- Ett eget plagg i samma del (t.ex. ett eget huvud eller ansikte) ersätter pedens automatiskt i 3D, som i spelet
+
 ### Nytt i 1.0.6
 - **Passa in plagg i 3D** – handtag direkt i 3D-vyn: flytta, rotera och skala plagget så att det sitter rätt på peden (även egna peds/NPC:er)
 - **Exakta reglage** under Passform i 3D: flytta X/Y/Z, rotera, storlek, bredd, höjd, djup och "Blås upp" mot klippning

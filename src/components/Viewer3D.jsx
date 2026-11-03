@@ -10,7 +10,7 @@ import { useStore } from '../lib/store'
 import { extOf } from '../lib/images'
 import { on, emit, uvCache } from '../lib/bus'
 import { desktop, importPedFromGta, pedsFromGta, pedFromFolder, texKey, texFamily } from '../lib/desktop'
-import { isCustomPed } from '../lib/categories'
+import { isCustomPed, categoryByKey } from '../lib/categories'
 import { Button, FilePick } from './ui'
 import { useT } from '../lib/i18n'
 import { fitOf, fitMatrix, captureGeometry, applyInflate, pivots } from '../lib/fit'
@@ -79,6 +79,10 @@ export default function Viewer3D() {
   // Handtag för passform: null (av), 'translate', 'rotate' eller 'scale'.
   const [gizmo, setGizmo] = useState(null)
   const [modelReady, setModelReady] = useState(0)
+  // Pedens kroppsdelar (head, uppr, lowr, feet …) som användaren har dolt, per ped.
+  const [hiddenParts, setHiddenParts] = useState({})
+  const [pedParts, setPedParts] = useState([])
+  const [partsMenu, setPartsMenu] = useState(false)
 
   // ---- Scen ----
   useEffect(() => {
@@ -168,6 +172,17 @@ export default function Viewer3D() {
       c.fitDrag = { id, fit }
       setFit(entry, fit)
     })
+    // Dubbelklick på en del av peden (t.ex. ansiktet) döljer den.
+    const ray = new THREE.Raycaster()
+    const onDbl = (e) => {
+      const c = ctx.current
+      if (!c.ped?.visible || !c.onPartPick) return
+      const r = renderer.domElement.getBoundingClientRect()
+      ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera)
+      const hit = ray.intersectObject(c.ped, true).find((h) => h.object.visible && h.object.userData.part)
+      if (hit) c.onPartPick(hit.object.userData.part.comp)
+    }
+    renderer.domElement.addEventListener('dblclick', onDbl)
     ctx.current = { scene, camera, controls, renderer, turn, gtaRoot, plainRoot, gizmo, proxy, fitDrag: null, ped: null, models: new Map(), textures: new Map(), spin: false, lights: { hemi, key, rim } }
     // Bara i utvecklingsläge: låter automatiska tester se vad 3D-scenen innehåller.
     if (import.meta.env.DEV) window.__alexViewer = ctx.current
@@ -177,6 +192,7 @@ export default function Viewer3D() {
       ro.disconnect()
       // dispose() i three r169 kraschar (anropar traverse på kontrollen) – koppla bara bort händelserna.
       gizmo.disconnect()
+      renderer.domElement.removeEventListener('dblclick', onDbl)
       renderer.dispose()
       mount.removeChild(renderer.domElement)
     }
@@ -234,6 +250,9 @@ export default function Viewer3D() {
         } else c.plainRoot.add(obj)
         obj.visible = showBody
         c.ped = obj
+        const parts = new Set()
+        obj.traverse((m) => m.isMesh && m.userData.part && parts.add(m.userData.part.comp))
+        setPedParts([...parts])
         setPedReady((n) => n + 1)
       })
       .catch((e) => notify(`${t('Basmodell')}: ${e.message}`, 'error'))
@@ -251,7 +270,7 @@ export default function Viewer3D() {
   // redigerade texturen direkt på pedens kropp.
   useEffect(() => {
     const c = ctx.current
-    if (!c.ped || !isCustomPed(gender)) return
+    if (!c.ped || !isCustomPed(gender)) return updatePedParts()
     const meshes = []
     c.ped.traverse((m) => m.isMesh && m.userData.part && meshes.push(m))
     if (!meshes.length) return
@@ -261,7 +280,7 @@ export default function Viewer3D() {
     for (const m of meshes) {
       const { comp, slot } = m.userData.part
       const showSlot = sel && sel.category === comp && meshes.some((x) => x.userData.part.comp === comp && x.userData.part.slot === sel.slot) ? sel.slot : first[comp]
-      m.visible = slot === showSlot
+      m.userData.slotVisible = slot === showSlot
       let map = m.userData.pedMap
       if (sel && sel.category === comp && slot === sel.slot) {
         const tex = sel.textures.find((x) => x.id === selectedTextureId) || sel.textures[0]
@@ -285,7 +304,36 @@ export default function Viewer3D() {
         m.material.needsUpdate = true
       }
     }
-  }, [pedReady, items, selectedItemId, selectedTextureId, gender])
+    updatePedParts()
+  }, [pedReady, items, selectedItemId, selectedTextureId, gender]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Som i spelet: ett eget plagg i samma del (t.ex. ett eget huvud) ersätter pedens. Delar som
+  // användaren dolt (dubbelklick eller menyn Kroppsdelar) visas inte heller.
+  const shownCats = items.filter((i) => i.gender === gender && i.preview && !i.hidden && (onlySelected ? i.id === selectedItemId : outfit[`${i.gender}:${i.category}`] === i.id)).map((i) => i.category)
+  const hidden = hiddenParts[gender] || []
+  const partsKey = `${hidden.join(',')}|${[...new Set(shownCats)].sort().join(',')}`
+  function updatePedParts() {
+    const c = ctx.current
+    if (!c.ped) return
+    const off = new Set([...hidden, ...shownCats])
+    c.ped.traverse((m) => {
+      if (m.isMesh && m.userData.part) m.visible = m.userData.slotVisible !== false && !off.has(m.userData.part.comp)
+    })
+  }
+  useEffect(updatePedParts, [partsKey, pedReady]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const togglePart = (comp, hide) =>
+    setHiddenParts((h) => {
+      const cur = new Set(h[gender] || [])
+      hide ? cur.add(comp) : cur.delete(comp)
+      return { ...h, [gender]: [...cur] }
+    })
+  useEffect(() => {
+    ctx.current.onPartPick = (comp) => {
+      togglePart(comp, true)
+      notify(t('{p} är dold. Visa igen under Kroppsdelar.', { p: partLabel(comp, t) }))
+    }
+  })
 
   // ---- Plagg ----
   useEffect(() => {
@@ -397,6 +445,31 @@ export default function Viewer3D() {
       <div ref={mountRef} className="absolute inset-0" />
       <div className="absolute left-3 right-3 top-3 flex flex-wrap gap-1.5">
         <Toggle on={showBody} set={setShowBody}>{t('Kropp')}</Toggle>
+        {showBody && pedParts.length > 0 && (
+          <div className="relative">
+            <Toggle on={partsMenu || hidden.length > 0} set={() => setPartsMenu((m) => !m)}>
+              {t('Kroppsdelar')}
+              {hidden.length > 0 && <span className="ml-1 text-accent">({hidden.length})</span>}
+            </Toggle>
+            {partsMenu && (
+              <div className="absolute left-0 top-8 z-10 w-52 rounded-md border border-ink-700 bg-ink-900 p-2 shadow-lg">
+                {pedParts.map((comp) => (
+                  <label key={comp} className="flex items-center gap-2 rounded px-1.5 py-1 text-xs text-ink-200 hover:bg-ink-800">
+                    <input type="checkbox" checked={!hidden.includes(comp)} onChange={(e) => togglePart(comp, !e.target.checked)} />
+                    {partLabel(comp, t)}
+                    {shownCats.includes(comp) && <span className="ml-auto text-[10px] text-ink-500">{t('ersatt')}</span>}
+                  </label>
+                ))}
+                <p className="mt-1.5 border-t border-ink-800 px-1.5 pt-1.5 text-[11px] leading-relaxed text-ink-500">{t('Tips: dubbelklicka på en del av peden för att dölja den.')}</p>
+                {hidden.length > 0 && (
+                  <Button size="sm" variant="ghost" className="mt-1 w-full" onClick={() => setHiddenParts((h) => ({ ...h, [gender]: [] }))}>
+                    {t('Visa alla')}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         <Toggle on={!onlySelected} set={(on) => setOnlySelected(!on)}>{t('Visa hela outfiten')}</Toggle>
         <Toggle on={wire} set={setWire}>{t('Trådnät')}</Toggle>
         <Toggle on={spin} set={setSpin}>{t('Snurra')}</Toggle>
@@ -555,6 +628,9 @@ function placeholderBody() {
   part(new THREE.CapsuleGeometry(0.08, 0.75, 4, 12), 0.1, 0.48, 0)
   return g
 }
+
+const partLabel = (comp, t) =>
+  ({ head: t('Huvud & ansikte'), uppr: t('Överkropp'), lowr: t('Ben'), feet: t('Fötter'), hand: t('Händer') })[comp] || t(categoryByKey(comp)?.label || comp)
 
 function Toggle({ on, set, children }) {
   return (

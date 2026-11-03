@@ -414,6 +414,13 @@ const E = {
   "Spara i modellen (för spelet)": ["Lagre i modellen (for spillet)","Gem i modellen (til spillet)","Tallenna malliin (peliä varten)","Save into the model (for the game)"],
   "Passformen syns direkt i 3D. \"Spara i modellen\" bygger om .ydd:n med Sollumz så att plagget sitter likadant i FiveM – viktningen mot skelettet behålls.": ["Passformen vises med en gang i 3D. «Lagre i modellen» bygger om .ydd-en med Sollumz så plagget sitter likt i FiveM – vektingen mot skjelettet beholdes.","Pasformen vises med det samme i 3D. \"Gem i modellen\" bygger .ydd'en om med Sollumz, så tøjstykket sidder ens i FiveM – vægtningen mod skelettet bevares.","Istuvuus näkyy heti 3D:ssä. \"Tallenna malliin\" rakentaa .ydd:n uudelleen Sollumzilla, jotta vaate istuu FiveMissä samoin – painotus luurankoon säilyy.","The fit shows right away in 3D. \"Save into the model\" rebuilds the .ydd with Sollumz so the item fits the same in FiveM – the weighting to the skeleton is kept."],
   "Passa in": ["Tilpass","Tilpas","Sovita","Fit"],
+  "{p} är dold. Visa igen under Kroppsdelar.": ["{p} er skjult. Vis igjen under Kroppsdeler.","{p} er skjult. Vis igen under Kropsdele.","{p} on piilotettu. Näytä uudelleen kohdasta Kehonosat.","{p} is hidden. Show it again under Body parts."],
+  "Kroppsdelar": ["Kroppsdeler","Kropsdele","Kehonosat","Body parts"],
+  "ersatt": ["erstattet","erstattet","korvattu","replaced"],
+  "Tips: dubbelklicka på en del av peden för att dölja den.": ["Tips: dobbeltklikk på en del av peden for å skjule den.","Tip: dobbeltklik på en del af peden for at skjule den.","Vinkki: piilota pedin osa kaksoisnapsauttamalla sitä.","Tip: double-click a part of the ped to hide it."],
+  "Visa alla": ["Vis alle","Vis alle","Näytä kaikki","Show all"],
+  "Ben": ["Bein","Ben","Jalat","Legs"],
+  "Händer": ["Hender","Hænder","Kädet","Hands"],
 }
 
 const LANG_INDEX = { no: 0, da: 1, fi: 2, en: 3 }

@@ -42,7 +42,11 @@ Varningarna kommer för att appen inte är signerad med ett köpt certifikat, in
      - flyttar modellens UV i Blender,
      - slår ihop normal- och spec-kartorna,
      - behåller alla färgvarianter.
-6. **Passform:** **Öppna i Blender** öppnar plagget med freemode-skelettet, så viktningen bevaras. Den rättade `.ydd`:n kommer tillbaka automatiskt.
+6. **Passform:**
+   - **Passa in** nere till vänster i 3D-vyn: dra i handtagen för att flytta, rotera och skala plagget på peden. Under **Passform i 3D** finns exakta reglage och **Blås upp** mot klippning.
+   - **Spara i modellen (för spelet)** bygger in passformen i `.ydd`:n, så plagget sitter likadant i FiveM.
+   - **Öppna i Blender** öppnar plagget med freemode-skelettet för större ändringar. Den rättade `.ydd`:n kommer tillbaka automatiskt.
+   - **Dölj pedens delar:** dubbelklicka på t.ex. ansiktet eller använd menyn **Kroppsdelar** i 3D-vyn. Ett eget plagg i samma del (t.ex. ett eget huvud) ersätter pedens automatiskt.
 7. **Exportera till FiveM:**
    - **Addon-paket** (rekommenderas) ger varje paket och kön egna filer:
      - `mp_m_freemode_01_<namn>^…`

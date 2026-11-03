@@ -200,10 +200,8 @@ const E = {
   'Flytta ner': ['Flytt ned', 'Flyt ned', 'Siirrä alas', 'Move down'],
   'Ta bort': ['Fjern', 'Fjern', 'Poista', 'Remove'],
   'Passform i 3D': ['Passform i 3D', 'Pasform i 3D', 'Istuvuus 3D:ssä', 'Fit in 3D'],
-  'Förskjut': ['Forskyv', 'Forskyd', 'Siirrä', 'Offset'],
   'Vänd UV (om texturen hamnar upp och ner)': ['Snu UV (hvis teksturen havner opp ned)', 'Vend UV (hvis teksturen står på hovedet)', 'Käännä UV (jos tekstuuri on ylösalaisin)', 'Flip UV (if the texture is upside down)'],
   'Nollställ': ['Nullstill', 'Nulstil', 'Nollaa', 'Reset'],
-  'Passformen påverkar bara förhandsvisningen. Klippning in game rättas i modellen med Öppna i Blender.': ['Passformen påvirker bare forhåndsvisningen. Klipping i spillet rettes i modellen med Åpne i Blender.', 'Pasformen påvirker kun forhåndsvisningen. Clipping i spillet rettes i modellen med Åbn i Blender.', 'Istuvuus vaikuttaa vain esikatseluun. Läpäisyt pelissä korjataan mallissa toiminnolla Avaa Blenderissä.', 'Fit only affects the preview. In-game clipping is fixed in the model with Open in Blender.'],
   'Ta bort "{n}"?': ['Fjerne «{n}»?', 'Fjern "{n}"?', 'Poistetaanko "{n}"?', 'Remove "{n}"?'],
   'Ta bort plagg': ['Fjern plagg', 'Fjern tøjstykke', 'Poista vaate', 'Remove item'],
   'Ingen fil': ['Ingen fil', 'Ingen fil', 'Ei tiedostoa', 'No file'],
@@ -405,6 +403,17 @@ const E = {
   'Klart': ['Ferdig', 'Færdig', 'Valmis', 'Done'],
   'Kunde inte spara projektet: {e}': ['Kunne ikke lagre prosjektet: {e}', 'Kunne ikke gemme projektet: {e}', 'Projektia ei voitu tallentaa: {e}', 'Could not save the project: {e}'],
   'nytt_projekt': ['nytt_prosjekt', 'nyt_projekt', 'uusi_projekti', 'new_project'],
+  "Visa plagget i 3D först.": ["Vis plagget i 3D først.","Vis tøjstykket i 3D først.","Näytä vaate ensin 3D:ssä.","Show the item in 3D first."],
+  "Passformen är sparad i {f}. Plagget sitter likadant i spelet.": ["Passformen er lagret i {f}. Plagget sitter likt i spillet.","Pasformen er gemt i {f}. Tøjstykket sidder ens i spillet.","Istuvuus on tallennettu tiedostoon {f}. Vaate istuu pelissä samoin.","The fit is saved in {f}. The item fits the same in game."],
+  "Dra i handtagen i 3D-vyn (Flytta, Rotera, Skala) eller använd reglagen.": ["Dra i håndtakene i 3D-visningen (Flytt, Roter, Skaler) eller bruk glidebryterne.","Træk i håndtagene i 3D-visningen (Flyt, Rotér, Skalér) eller brug skyderne.","Vedä 3D-näkymän kahvoista (Siirrä, Kierrä, Skaalaa) tai käytä liukusäätimiä.","Drag the handles in the 3D view (Move, Rotate, Scale) or use the sliders."],
+  "Rotera": ["Roter","Rotér","Kierrä","Rotate"],
+  "Bredd": ["Bredde","Bredde","Leveys","Width"],
+  "Höjd": ["Høyde","Højde","Korkeus","Height"],
+  "Djup": ["Dybde","Dybde","Syvyys","Depth"],
+  "Blås upp (mot klippning)": ["Blås opp (mot klipping)","Pust op (mod clipping)","Puhalla (leikkautumista vastaan)","Inflate (against clipping)"],
+  "Spara i modellen (för spelet)": ["Lagre i modellen (for spillet)","Gem i modellen (til spillet)","Tallenna malliin (peliä varten)","Save into the model (for the game)"],
+  "Passformen syns direkt i 3D. \"Spara i modellen\" bygger om .ydd:n med Sollumz så att plagget sitter likadant i FiveM – viktningen mot skelettet behålls.": ["Passformen vises med en gang i 3D. «Lagre i modellen» bygger om .ydd-en med Sollumz så plagget sitter likt i FiveM – vektingen mot skjelettet beholdes.","Pasformen vises med det samme i 3D. \"Gem i modellen\" bygger .ydd'en om med Sollumz, så tøjstykket sidder ens i FiveM – vægtningen mod skelettet bevares.","Istuvuus näkyy heti 3D:ssä. \"Tallenna malliin\" rakentaa .ydd:n uudelleen Sollumzilla, jotta vaate istuu FiveMissä samoin – painotus luurankoon säilyy.","The fit shows right away in 3D. \"Save into the model\" rebuilds the .ydd with Sollumz so the item fits the same in FiveM – the weighting to the skeleton is kept."],
+  "Passa in": ["Tilpass","Tilpas","Sovita","Fit"],
 }
 
 const LANG_INDEX = { no: 0, da: 1, fi: 2, en: 3 }

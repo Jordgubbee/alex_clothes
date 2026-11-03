@@ -523,6 +523,18 @@ ipcMain.handle('blender:merge', async (_e, { gender, ydd, spec }) => {
   }
 })
 
+ipcMain.handle('blender:fit', async (_e, { gender, ydd, fit }) => {
+  const { dir, paths } = writeTemp(withSkeleton([ydd], gender))
+  try {
+    const specPath = path.join(dir, 'fit.json')
+    fs.writeFileSync(specPath, JSON.stringify(fit))
+    const out = await runBridge(['fit', paths[0], path.join(dir, 'out'), specPath])
+    return { name: path.basename(out), data: fs.readFileSync(out) }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 ipcMain.handle('blender:materials', async (_e, { gender, ydd }) => {
   const key = hash([ydd.data])
   const cache = path.join(CACHE, `${key}.materials.json`)

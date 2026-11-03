@@ -8,6 +8,7 @@ import { Thumb } from './Sidebar'
 import { desktop, payload, previewFromYdd, cleanError, embeddedTextures, mergeItemTextures, texKey, atlasLayout, drawAtlas } from '../lib/desktop'
 import { cloneCanvas, canvasFrom, fileToCanvases } from '../lib/images'
 import { useT } from '../lib/i18n'
+import { fitOf, isIdentity, IDENTITY_FIT, fitForBlender, pivots } from '../lib/fit'
 
 const blankCanvas = (n) => {
   const c = canvasFrom(n, n)
@@ -176,38 +177,7 @@ export default function Inspector() {
         </div>
       </Section>
 
-      <Section id="fit" collapsible defaultOpen={false} title={t('Passform i 3D')}>
-        <div className="space-y-2.5">
-          {['X', 'Y', 'Z'].map((axis, i) => (
-            <Slider
-              key={axis}
-              label={`${t('Förskjut')} ${axis}`}
-              value={item.offset[i]}
-              min={-0.3}
-              max={0.3}
-              step={0.002}
-              format={(v) => `${(v * 100).toFixed(1)} cm`}
-              onChange={(v) => set({ offset: item.offset.map((o, j) => (j === i ? v : o)) })}
-            />
-          ))}
-          <Slider label={t('Skala')} value={item.scale} min={0.8} max={1.2} step={0.002} format={(v) => `${Math.round(v * 1000) / 10}%`} onChange={(v) => set({ scale: v })} />
-          <label className="flex items-center gap-2 text-xs text-ink-300">
-            <input
-              type="checkbox"
-              checked={!!item.flipUV}
-              onChange={(e) => {
-                set({ flipUV: e.target.checked })
-                emit('uv', item.id)
-              }}
-            />
-            {t('Vänd UV (om texturen hamnar upp och ner)')}
-          </label>
-          <Button size="sm" variant="ghost" onClick={() => set({ offset: [0, 0, 0], scale: 1 })}>
-            {t('Nollställ')}
-          </Button>
-          <p className="text-[11px] leading-relaxed text-ink-500">{t('Passformen påverkar bara förhandsvisningen. Klippning in game rättas i modellen med Öppna i Blender.')}</p>
-        </div>
-      </Section>
+      <FitPanel item={item} set={set} />
 
       <div className="p-4">
         <Button variant="danger" className="w-full" onClick={() => confirm(t('Ta bort "{n}"?', { n: item.name })) && removeItem(item.id)}>
@@ -306,6 +276,77 @@ function MergePanel({ item }) {
       </div>
       {missing.length > 0 && <p className="mt-2 text-[11px] text-accent">{t('Välj en bild för: {k}', { k: missing.join(', ') })}</p>}
       <p className="mt-2 text-[11px] leading-relaxed text-ink-500">{t('Huvudtexturens färgvarianter behålls – varje variant får en egen sammanslagen textur. Normal- och spec-kartor slås ihop på samma sätt.')}</p>
+    </Section>
+  )
+}
+
+// Passform i 3D: exakta reglage för det som handtagen i 3D-vyn gör, plus "blås upp" mot klippning.
+// "Spara i modellen" bakar in passformen i .ydd:n så att plagget sitter likadant i spelet.
+function FitPanel({ item, set }) {
+  const t = useT()
+  const notify = useStore((s) => s.notify)
+  const blender = useStore((s) => s.blender)
+  const [busy, setBusy] = useState(false)
+  const fit = fitOf(item)
+  const change = (patch) => set({ fit: { ...fit, ...patch }, offset: [0, 0, 0], scale: 1 })
+  const cm = (v) => `${(v * 100).toFixed(1)} cm`
+  const pct = (v) => `${Math.round(v * 1000) / 10}%`
+
+  const bake = async () => {
+    const pivot = pivots.get(item.id)
+    if (!pivot) return notify(t('Visa plagget i 3D först.'), 'error')
+    setBusy(true)
+    try {
+      const [x, y, z] = pivot
+      const res = await desktop.fitModel({ gender: item.gender, ydd: await payload(item.ydd), fit: fitForBlender(fit, { x, y, z }) })
+      set({ ydd: new File([res.data], item.ydd.name), fit: { ...IDENTITY_FIT }, offset: [0, 0, 0], scale: 1 })
+      await previewFromYdd(item.id)
+      notify(t('Passformen är sparad i {f}. Plagget sitter likadant i spelet.', { f: item.ydd.name }))
+    } catch (e) {
+      notify(cleanError(e), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Section id="fit" collapsible defaultOpen={false} title={t('Passform i 3D')}>
+      <div className="space-y-2.5">
+        <p className="text-[11px] leading-relaxed text-ink-500">{t('Dra i handtagen i 3D-vyn (Flytta, Rotera, Skala) eller använd reglagen.')}</p>
+        {['x', 'y', 'z'].map((k) => (
+          <Slider key={k} label={`${t('Flytta')} ${k.toUpperCase()}`} value={fit[k]} min={-0.3} max={0.3} step={0.001} format={cm} onChange={(v) => change({ [k]: v })} />
+        ))}
+        <Slider label={t('Rotera')} value={fit.rotY} min={-45} max={45} step={0.5} format={(v) => `${v.toFixed(1)}°`} onChange={(v) => change({ rotY: v })} />
+        <Slider label={t('Storlek')} value={fit.scale} min={0.7} max={1.3} step={0.002} format={pct} onChange={(v) => change({ scale: v })} />
+        <Slider label={t('Bredd')} value={fit.sx} min={0.7} max={1.3} step={0.002} format={pct} onChange={(v) => change({ sx: v })} />
+        <Slider label={t('Höjd')} value={fit.sy} min={0.7} max={1.3} step={0.002} format={pct} onChange={(v) => change({ sy: v })} />
+        <Slider label={t('Djup')} value={fit.sz} min={0.7} max={1.3} step={0.002} format={pct} onChange={(v) => change({ sz: v })} />
+        <Slider label={t('Blås upp (mot klippning)')} value={fit.inflate} min={-10} max={20} step={0.1} format={(v) => `${v.toFixed(1)} mm`} onChange={(v) => change({ inflate: v })} />
+        <label className="flex items-center gap-2 text-xs text-ink-300">
+          <input
+            type="checkbox"
+            checked={!!item.flipUV}
+            onChange={(e) => {
+              set({ flipUV: e.target.checked })
+              emit('uv', item.id)
+            }}
+          />
+          {t('Vänd UV (om texturen hamnar upp och ner)')}
+        </label>
+        <div className="flex gap-1.5">
+          <Button size="sm" variant="ghost" disabled={isIdentity(fit)} onClick={() => set({ fit: { ...IDENTITY_FIT }, offset: [0, 0, 0], scale: 1 })}>
+            {t('Nollställ')}
+          </Button>
+          {desktop && blender?.ok && (
+            <Button size="sm" variant="primary" className="flex-1" disabled={!item.ydd || isIdentity(fit) || busy || item.converting} onClick={bake}>
+              {busy ? t('Sollumz arbetar…') : t('Spara i modellen (för spelet)')}
+            </Button>
+          )}
+        </div>
+        <p className="text-[11px] leading-relaxed text-ink-500">
+          {t('Passformen syns direkt i 3D. "Spara i modellen" bygger om .ydd:n med Sollumz så att plagget sitter likadant i FiveM – viktningen mot skelettet behålls.')}
+        </p>
+      </div>
     </Section>
   )
 }

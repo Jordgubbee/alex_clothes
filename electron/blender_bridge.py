@@ -396,6 +396,57 @@ def cmd_merge(ydd, out_dir, spec_path):
     ok(os.path.join(out_dir, out[0]))
 
 
+def lod_meshes(obj):
+    """Alla mesh-data för objektet: den aktiva och Sollumz LOD:er (high, medium, low …)."""
+    out = [obj.data]
+    lods = getattr(obj, "sz_lods", None)
+    for level in ("very_high", "high", "medium", "low", "very_low"):
+        m = getattr(getattr(lods, level, None), "mesh", None) if lods else None
+        if m is not None and m not in out:
+            out.append(m)
+    return out
+
+
+def cmd_fit(ydd, out_dir, spec_path):
+    """Bakar in passformen från 3D-vyn i modellen: "blås upp" längs normalerna, sedan skala, rotation
+    runt höjdaxeln och flytt runt plaggets mittpunkt. Gäller alla LOD:er. Viktningen rörs inte."""
+    import json
+    from mathutils import Matrix, Vector
+    spec = json.load(open(spec_path, encoding="utf-8"))
+    clear_scene()
+    import_files([ydd])
+    pivot = Vector(spec["pivot"])
+    sx, sy, sz = spec["scale"]
+    scale = Matrix.Diagonal((sx, sy, sz, 1.0))
+    M = Matrix.Translation(pivot + Vector(spec["t"])) @ Matrix.Rotation(math.radians(spec["rotZ"]), 4, "Z") @ scale @ Matrix.Translation(-pivot)
+    inflate = float(spec.get("inflate", 0))
+    done = set()
+    n = 0
+    for obj in [o for o in bpy.data.objects if o.type == "MESH"]:
+        if getattr(obj, "sollum_type", "").startswith("sollumz_bound"):
+            continue
+        local = obj.matrix_world.inverted() @ M @ obj.matrix_world
+        for mesh in lod_meshes(obj):
+            if mesh.name in done:
+                continue
+            done.add(mesh.name)
+            if inflate:
+                for v in mesh.vertices:
+                    v.co += v.normal * inflate
+            mesh.transform(local)
+            mesh.update()
+            n += 1
+    if not n:
+        raise RuntimeError("Hittade inga meshar i modellen.")
+    os.makedirs(out_dir, exist_ok=True)
+    res = bpy.ops.sollumz.export_assets(directory=out_dir + os.sep, direct_export=True, limit_to_selected=False, **PED_EXPORT)
+    out = [f for f in os.listdir(out_dir) if f.lower().endswith(".ydd")]
+    if "FINISHED" not in res or not out:
+        raise RuntimeError("Sollumz kunde inte spara den nya .ydd:n.")
+    print("ALEX_INFO " + json.dumps({"meshes": n}), flush=True)
+    ok(os.path.join(out_dir, out[0]))
+
+
 def cmd_materials(ydd):
     """Listar diffuse-texturerna som modellen använder."""
     import json
@@ -508,6 +559,9 @@ def main():
         elif mode == "merge":
             enable_sollumz()
             cmd_merge(ARGS[1], ARGS[2], ARGS[3])
+        elif mode == "fit":
+            enable_sollumz()
+            cmd_fit(ARGS[1], ARGS[2], ARGS[3])
         elif mode == "materials":
             enable_sollumz()
             cmd_materials(ARGS[1])

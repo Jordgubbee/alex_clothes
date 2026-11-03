@@ -23,6 +23,11 @@ Appen är inte signerad med ett köpt certifikat.
 - **Edge**: ··· vid nedladdningen › Behåll › Visa mer › Behåll ändå. **Chrome**: Ctrl+J › Behåll farlig fil.
 - **Smart App Control** (Windows 11) kan stoppa osignerade program helt. Använd då den portabla versionen eller stäng av Smart App Control under Windows-säkerhet › App- och webbläsarkontroll.
 
+### Nytt i 1.0.6
+- **Passa in plagg i 3D** – handtag direkt i 3D-vyn: flytta, rotera och skala plagget så att det sitter rätt på peden (även egna peds/NPC:er)
+- **Exakta reglage** under Passform i 3D: flytta X/Y/Z, rotera, storlek, bredd, höjd, djup och "Blås upp" mot klippning
+- **Spara i modellen (för spelet)** – passformen byggs in i .ydd:n med Sollumz, i alla LOD:er, och viktningen mot skelettet behålls – plagget sitter likadant i FiveM
+
 ### Nytt i 1.0.5
 - **Flytta loggor mellan texturer** – välj en logga eller text och "Lägg på andra texturer…": kopiera eller flytta den till andra färgvarianter eller plagg, på exakt samma plats och i samma storlek
 - **Gör inbrända loggor till lager** – markera en logga i texturen och välj "Gör till lager" eller "Klipp ut till lager"

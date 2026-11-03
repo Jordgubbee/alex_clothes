@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -12,6 +13,7 @@ import { desktop, importPedFromGta, pedsFromGta, pedFromFolder, texKey, texFamil
 import { isCustomPed } from '../lib/categories'
 import { Button, FilePick } from './ui'
 import { useT } from '../lib/i18n'
+import { fitOf, fitMatrix, captureGeometry, applyInflate, pivots } from '../lib/fit'
 
 // GTA:s freemode-gubbe har sin rot vid höften, ungefär en meter över fötterna.
 const GTA_ROOT_HEIGHT = 1.0
@@ -74,6 +76,9 @@ export default function Viewer3D() {
   const [spin, setSpin] = useState(false)
   const [light, setLight] = useState('studio')
   const [pedReady, setPedReady] = useState(0)
+  // Handtag för passform: null (av), 'translate', 'rotate' eller 'scale'.
+  const [gizmo, setGizmo] = useState(null)
+  const [modelReady, setModelReady] = useState(0)
 
   // ---- Scen ----
   useEffect(() => {
@@ -129,13 +134,49 @@ export default function Viewer3D() {
       controls.update()
       renderer.render(scene, camera)
     }
-    ctx.current = { scene, camera, controls, renderer, turn, gtaRoot, plainRoot, ped: null, models: new Map(), textures: new Map(), spin: false, lights: { hemi, key, rim } }
+    // Handtagen sitter på en hjälppunkt i plaggets mitt. Under dragningen uppdateras bara 3D-vyn;
+    // värdena sparas i plagget när musknappen släpps.
+    const gizmo = new TransformControls(camera, renderer.domElement)
+    gizmo.setSize(0.8)
+    const proxy = new THREE.Object3D()
+    scene.add(gizmo.getHelper())
+    gizmo.addEventListener('dragging-changed', (e) => {
+      controls.enabled = !e.value
+      const c = ctx.current
+      if (e.value || !c.fitDrag) return
+      useStore.getState().updateItem(c.fitDrag.id, { fit: c.fitDrag.fit, offset: [0, 0, 0], scale: 1 })
+      c.fitDrag = null
+    })
+    gizmo.addEventListener('objectChange', () => {
+      const c = ctx.current
+      const id = proxy.userData.itemId
+      const entry = c.models.get(id)
+      const item = useStore.getState().items.find((i) => i.id === id)
+      if (!entry?.pivot || !item) return
+      const base = c.fitDrag?.fit || fitOf(item)
+      const p = entry.pivot
+      const fit = {
+        ...base,
+        x: proxy.position.x - p.x,
+        y: proxy.position.y - p.y,
+        z: proxy.position.z - p.z,
+        rotY: THREE.MathUtils.radToDeg(proxy.rotation.y),
+        sx: proxy.scale.x / base.scale,
+        sy: proxy.scale.y / base.scale,
+        sz: proxy.scale.z / base.scale,
+      }
+      c.fitDrag = { id, fit }
+      setFit(entry, fit)
+    })
+    ctx.current = { scene, camera, controls, renderer, turn, gtaRoot, plainRoot, gizmo, proxy, fitDrag: null, ped: null, models: new Map(), textures: new Map(), spin: false, lights: { hemi, key, rim } }
     // Bara i utvecklingsläge: låter automatiska tester se vad 3D-scenen innehåller.
     if (import.meta.env.DEV) window.__alexViewer = ctx.current
     loop()
     return () => {
       cancelAnimationFrame(raf)
       ro.disconnect()
+      // dispose() i three r169 kraschar (anropar traverse på kontrollen) – koppla bara bort händelserna.
+      gizmo.disconnect()
       renderer.dispose()
       mount.removeChild(renderer.domElement)
     }
@@ -269,18 +310,48 @@ export default function Viewer3D() {
           .then((obj) => {
             if (c.models.get(item.id) !== entry) return
             uvCache.set(item.id, collectUV(obj, entry.isGlb))
+            // Mittpunkten räknas innan plagget flyttas – rotation och skala sker runt den.
+            entry.pivot = new THREE.Box3().setFromObject(obj).getCenter(new THREE.Vector3())
+            pivots.set(item.id, entry.pivot.toArray())
+            captureGeometry(obj)
+            entry.obj = obj
             entry.group.add(obj)
+            setFit(entry, fitOf(useStore.getState().items.find((i) => i.id === item.id) || item))
+            setModelReady((n) => n + 1)
             emit('uv', item.id)
             emit('refresh-3d')
           })
           .catch((e) => notify(`${item.name}: ${e.message}`, 'error'))
       }
-      entry.group.position.set(...item.offset)
-      entry.group.scale.setScalar(item.scale)
+      if (c.fitDrag?.id !== item.id) setFit(entry, fitOf(item))
       entry.group.visible = !item.hidden
       applyTexture(c, entry, item, item.id === selectedItemId ? selectedTextureId : null, wire)
     }
   }, [items, gender, selectedItemId, selectedTextureId, onlySelected, wire, notify, outfit])
+
+  // Handtagen följer det valda plagget och dess passform.
+  const selectedItem = items.find((i) => i.id === selectedItemId && i.gender === gender)
+  useEffect(() => {
+    const c = ctx.current
+    const entry = selectedItem && c.models.get(selectedItem.id)
+    if (!gizmo || !entry?.pivot || !entry.group.parent) {
+      c.gizmo.detach()
+      return
+    }
+    if (c.fitDrag) return
+    const fit = fitOf(selectedItem)
+    const { proxy } = c
+    if (proxy.parent !== entry.group.parent) entry.group.parent.add(proxy)
+    proxy.userData.itemId = selectedItem.id
+    proxy.position.set(entry.pivot.x + fit.x, entry.pivot.y + fit.y, entry.pivot.z + fit.z)
+    proxy.rotation.set(0, THREE.MathUtils.degToRad(fit.rotY), 0)
+    proxy.scale.set(fit.scale * fit.sx, fit.scale * fit.sy, fit.scale * fit.sz)
+    c.gizmo.setMode(gizmo)
+    // Plagg vrids bara runt höjdaxeln – annars hamnar de snett mot skelettet.
+    c.gizmo.showX = c.gizmo.showZ = gizmo !== 'rotate'
+    c.gizmo.setSpace(gizmo === 'scale' ? 'local' : 'world')
+    c.gizmo.attach(proxy)
+  }, [gizmo, selectedItem, modelReady])
 
   useEffect(
     () =>
@@ -343,6 +414,20 @@ export default function Viewer3D() {
         <Button size="sm" title={t('Zooma på fötterna')} onClick={() => camTo(0, 0.4, 0.2, 1.3)}>{t('Fötter')}</Button>
         <Button size="sm" title={t('Spara bild')} onClick={screenshot}>{t('Bild')}</Button>
       </div>
+      {selectedItem?.preview && basePed[gender] && (
+        <div className="absolute bottom-3 left-3 flex items-center gap-1 whitespace-nowrap rounded-md border border-ink-800 bg-ink-900/90 p-1">
+          <span className="px-1.5 text-[11px] text-ink-400">{t('Passa in')}</span>
+          {[
+            ['translate', t('Flytta')],
+            ['rotate', t('Rotera')],
+            ['scale', t('Skala')],
+          ].map(([mode, label]) => (
+            <Toggle key={mode} on={gizmo === mode} set={(on) => setGizmo(on ? mode : null)}>
+              {label}
+            </Toggle>
+          ))}
+        </div>
+      )}
       {pedBusy && <div className="absolute right-3 top-12 rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-xs text-ink-300">{pedBusy}</div>}
       {!basePed[gender] && !pedBusy && (
         <div className="absolute bottom-3 left-3 max-w-sm rounded-md border border-ink-700 bg-ink-900/95 p-3 text-xs leading-relaxed text-ink-300">
@@ -373,6 +458,22 @@ export default function Viewer3D() {
       )}
     </div>
   )
+}
+
+// Lägger passformen på plagget: flytt/rotation/skala runt mittpunkten och "blås upp" längs normalerna.
+function setFit(entry, fit) {
+  entry.group.matrixAutoUpdate = false
+  if (!entry.pivot) {
+    entry.group.matrix.identity()
+    entry.group.matrixWorldNeedsUpdate = true
+    return
+  }
+  entry.group.matrix.copy(fitMatrix(fit, entry.pivot))
+  entry.group.matrixWorldNeedsUpdate = true
+  if (entry.inflate !== fit.inflate) {
+    entry.inflate = fit.inflate
+    applyInflate(entry.obj, fit.inflate / 1000)
+  }
 }
 
 function canvasMap(c, entry, item, tex) {

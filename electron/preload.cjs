@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('alex', {
   patchYtd: (original, name, replacements) => ipcRenderer.invoke('blender:ytdPatch', { original, name, replacements }),
   buildYmt: (jobs) => ipcRenderer.invoke('ymt:build', jobs),
   mergeTextures: (args) => ipcRenderer.invoke('blender:merge', args),
+  fitModel: (args) => ipcRenderer.invoke('blender:fit', args),
   editInBlender: (itemId, files, gender) => ipcRenderer.invoke('blender:edit', { itemId, files, gender }),
   onEdited: (fn) => {
     const h = (_e, d) => fn(d)

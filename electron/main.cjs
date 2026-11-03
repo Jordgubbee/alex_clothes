@@ -628,6 +628,38 @@ ipcMain.handle('ped:fromGta', async () => {
   return done
 })
 
+// ---- Pedens utseende: andra ansikten, frisyrer och kläder ur GTA på freemode-gubben ----
+// Listan över freemode-filer sparas en gång; varje vald del plockas ut och byggs först när den väljs.
+const GTA_INDEX = path.join(PEDS, 'gta_index.json')
+async function gtaIndex() {
+  if (fs.existsSync(GTA_INDEX)) return JSON.parse(fs.readFileSync(GTA_INDEX, 'utf8'))
+  const gta = toolPath('gtaPath', detectGta)
+  if (!gta) throw new Error('Hittar inte GTA V. Välj spelmappen under Inställningar.')
+  const index = JSON.parse(await runPs(EXTRACT, ['-CodeWalker', codewalkerPath(), '-Gta', gta, '-List']))
+  fs.writeFileSync(GTA_INDEX, JSON.stringify(index))
+  return index
+}
+ipcMain.handle('ped:gtaIndex', async (_e, gender) => (await gtaIndex())[PED_MODELS[gender]] || [])
+
+ipcMain.handle('ped:gtaPart', async (_e, { gender, comp, slot, letter }) => {
+  const model = PED_MODELS[gender]
+  const names = (await gtaIndex())[model] || []
+  const n = String(slot).padStart(3, '0')
+  const ydd = names.find((x) => x === `${comp}_${n}_r.ydd` || x === `${comp}_${n}_u.ydd`)
+  const ytd = names.find((x) => x.startsWith(`${comp}_diff_${n}_${letter || 'a'}_`) || x === `${comp}_diff_${n}_${letter || 'a'}.ytd`)
+  if (!ydd) throw new Error(`${comp}_${n} finns inte i GTA.`)
+  const dir = path.join(PEDS, 'gta_parts', model)
+  const missing = [ydd, ytd].filter((x) => x && !fs.existsSync(path.join(dir, x)))
+  if (missing.length) {
+    const gta = toolPath('gtaPath', detectGta)
+    if (!gta) throw new Error('Hittar inte GTA V. Välj spelmappen under Inställningar.')
+    await runPs(EXTRACT, ['-CodeWalker', codewalkerPath(), '-Gta', gta, '-Out', path.join(PEDS, 'gta_parts'), '-Ped', model, '-Names', missing.join(',')])
+  }
+  const read = (x) => ({ name: x, data: fs.readFileSync(path.join(dir, x)) })
+  const glb = await convert(withSkeleton([read(ydd)], gender))
+  return { glb, ytd: ytd && fs.existsSync(path.join(dir, ytd)) ? read(ytd) : null }
+})
+
 // Läser in en mapp som exporterats från OpenIV (t.ex. hela mp_m_freemode_01-mappen).
 ipcMain.handle('ped:fromFolder', async (_e, gender) => {
   const r = await dialog.showOpenDialog(win, { title: `Välj mappen ${PED_MODELS[gender]}`, properties: ['openDirectory'] })

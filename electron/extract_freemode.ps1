@@ -3,11 +3,16 @@
 #   x64v.rpf\models\cdimages\streamedpeds_mp.rpf\mp_m_freemode_01(.yft + mapp)
 #
 #   powershell -File extract_freemode.ps1 -CodeWalker <mapp> -Gta <mapp> -Out <mapp>
+#   ... -List                                    listar alla filer i båda freemode-mapparna (JSON)
+#   ... -Out <mapp> -Ped <modell> -Names a,b,c   plockar ut bara de namngivna filerna (t.ex. head_005_r.ydd)
 # Skriver "ALEX_OK <antal>" eller "ALEX_ERR <meddelande>".
 param(
   [Parameter(Mandatory)] [string]$CodeWalker,
   [Parameter(Mandatory)] [string]$Gta,
-  [Parameter(Mandatory)] [string]$Out
+  [string]$Out,
+  [string]$Ped,
+  [string]$Names,
+  [switch]$List
 )
 $ErrorActionPreference = 'Stop'
 
@@ -49,12 +54,24 @@ try {
     if ($r.Children) { foreach ($c in $r.Children) { $stack.Push($c) } }
   }
 
+  $peds = @('mp_m_freemode_01', 'mp_f_freemode_01')
+  if ($List) {
+    $index = @{}
+    foreach ($ped in $peds) {
+      $index[$ped] = @($entries | Where-Object { $_.entry.Path.ToLower() -like "*streamedpeds_mp.rpf\$ped\*" } | ForEach-Object { $_.entry.Name.ToLower() })
+    }
+    Write-Output ("ALEX_OK " + ($index | ConvertTo-Json -Compress -Depth 3))
+    exit 0
+  }
+  if ($Ped) { $peds = @($Ped) }
+
   $count = 0
-  foreach ($ped in @('mp_m_freemode_01', 'mp_f_freemode_01')) {
+  foreach ($ped in $peds) {
     $dir = Join-Path $Out $ped
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     $want = @("$ped.yft")
     foreach ($p in $Parts) { $want += "${p}_000_r.ydd", "${p}_000_u.ydd", "${p}_diff_000_a_whi.ytd", "${p}_diff_000_a_uni.ytd" }
+    if ($Names) { $want = @($Names.ToLower().Split(',') | ForEach-Object { $_.Trim() }) }
     foreach ($item in $entries) {
       $e = $item.entry
       $path = $e.Path.ToLower()

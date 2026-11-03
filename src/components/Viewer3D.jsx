@@ -7,12 +7,13 @@ import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { useStore } from '../lib/store'
-import { extOf } from '../lib/images'
+import { extOf, fileToCanvases } from '../lib/images'
 import { on, emit, uvCache } from '../lib/bus'
-import { desktop, importPedFromGta, pedsFromGta, pedFromFolder, texKey, texFamily } from '../lib/desktop'
-import { isCustomPed, categoryByKey } from '../lib/categories'
+import { desktop, cleanError, importPedFromGta, pedsFromGta, pedFromFolder, texKey, texFamily } from '../lib/desktop'
+import { isCustomPed } from '../lib/categories'
 import { Button, FilePick } from './ui'
 import { useT } from '../lib/i18n'
+import PedPanel, { partLabel } from './PedPanel'
 import { fitOf, fitMatrix, captureGeometry, applyInflate, pivots } from '../lib/fit'
 
 // GTA:s freemode-gubbe har sin rot vid höften, ungefär en meter över fötterna.
@@ -79,10 +80,13 @@ export default function Viewer3D() {
   // Handtag för passform: null (av), 'translate', 'rotate' eller 'scale'.
   const [gizmo, setGizmo] = useState(null)
   const [modelReady, setModelReady] = useState(0)
-  // Pedens kroppsdelar (head, uppr, lowr, feet …) som användaren har dolt, per ped.
-  const [hiddenParts, setHiddenParts] = useState({})
+  // Pedens delar i grundmodellen (head, uppr, lowr, feet …) och menyn för pedens utseende.
   const [pedParts, setPedParts] = useState([])
-  const [partsMenu, setPartsMenu] = useState(false)
+  const [pedMenu, setPedMenu] = useState(false)
+  const pedLook = useStore((s) => s.pedLook)
+  const setPedPart = useStore((s) => s.setPedPart)
+  const look = pedLook[gender] || {}
+  const lookKey = JSON.stringify(look)
 
   // ---- Scen ----
   useEffect(() => {
@@ -179,11 +183,14 @@ export default function Viewer3D() {
       if (!c.ped?.visible || !c.onPartPick) return
       const r = renderer.domElement.getBoundingClientRect()
       ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera)
-      const hit = ray.intersectObject(c.ped, true).find((h) => h.object.visible && h.object.userData.part)
+      const hit = ray.intersectObjects([c.ped, c.lookGroup], true).find((h) => h.object.visible && h.object.userData.part)
       if (hit) c.onPartPick(hit.object.userData.part.comp)
     }
     renderer.domElement.addEventListener('dblclick', onDbl)
-    ctx.current = { scene, camera, controls, renderer, turn, gtaRoot, plainRoot, gizmo, proxy, fitDrag: null, ped: null, models: new Map(), textures: new Map(), spin: false, lights: { hemi, key, rim } }
+    // Delar som valts ur GTA (andra ansikten, frisyrer, kläder) på freemode-gubben.
+    const lookGroup = new THREE.Group()
+    gtaRoot.add(lookGroup)
+    ctx.current = { scene, camera, controls, renderer, turn, gtaRoot, plainRoot, gizmo, proxy, lookGroup, lookParts: new Map(), fitDrag: null, ped: null, models: new Map(), textures: new Map(), spin: false, lights: { hemi, key, rim } }
     // Bara i utvecklingsläge: låter automatiska tester se vad 3D-scenen innehåller.
     if (import.meta.env.DEV) window.__alexViewer = ctx.current
     loop()
@@ -266,8 +273,8 @@ export default function Viewer3D() {
     if (ctx.current.ped) ctx.current.ped.visible = showBody
   }, [showBody])
 
-  // Egna peds med alla delar i en fil: visa en variant per del (vald eller den första) och lägg den
-  // redigerade texturen direkt på pedens kropp.
+  // Egna peds med alla delar i en fil: visa en variant per del (vald i plagglistan, vald i Ped-menyn
+  // eller den första) och lägg den redigerade eller valda texturen direkt på pedens kropp.
   useEffect(() => {
     const c = ctx.current
     if (!c.ped || !isCustomPed(gender)) return updatePedParts()
@@ -276,28 +283,22 @@ export default function Viewer3D() {
     if (!meshes.length) return
     const first = {}
     for (const m of meshes) first[m.userData.part.comp] = Math.min(first[m.userData.part.comp] ?? 999, m.userData.part.slot)
+    const has = (comp, slot) => meshes.some((x) => x.userData.part.comp === comp && x.userData.part.slot === slot)
     const sel = items.find((i) => i.id === selectedItemId && i.gender === gender)
+    const pedTex = new Map((pedTextures[gender] || []).map((x) => [texKey(x.name), x.canvas]))
     for (const m of meshes) {
       const { comp, slot } = m.userData.part
-      const showSlot = sel && sel.category === comp && meshes.some((x) => x.userData.part.comp === comp && x.userData.part.slot === sel.slot) ? sel.slot : first[comp]
+      const choice = look[comp]
+      const showSlot = sel && sel.category === comp && has(comp, sel.slot) ? sel.slot : choice && has(comp, choice.slot) ? choice.slot : first[comp]
       m.userData.slotVisible = slot === showSlot
       let map = m.userData.pedMap
       if (sel && sel.category === comp && slot === sel.slot) {
         const tex = sel.textures.find((x) => x.id === selectedTextureId) || sel.textures[0]
-        if (tex?.canvas) {
-          map = c.textures.get(tex.id)
-          if (!map || map.image !== tex.canvas) {
-            map = new THREE.CanvasTexture(tex.canvas)
-            map.colorSpace = THREE.SRGBColorSpace
-            map.flipY = false
-            map.wrapS = map.wrapT = THREE.RepeatWrapping
-            c.textures.set(tex.id, map)
-          }
-          if (map.userData.version !== tex.version) {
-            map.userData.version = tex.version
-            map.needsUpdate = true
-          }
-        }
+        if (tex?.canvas) map = liveMap(c, tex.id, tex.canvas, tex.version)
+      } else if (choice?.letter && slot === choice.slot) {
+        const prefix = `${comp}_diff_${String(slot).padStart(3, '0')}_${choice.letter}`
+        const key = [...pedTex.keys()].find((k) => k === prefix || k.startsWith(`${prefix}_`))
+        if (key) map = liveMap(c, `ped:${gender}:${key}`, pedTex.get(key), 0)
       }
       if (m.material.map !== map) {
         m.material.map = map
@@ -305,33 +306,85 @@ export default function Viewer3D() {
       }
     }
     updatePedParts()
-  }, [pedReady, items, selectedItemId, selectedTextureId, gender]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pedReady, items, selectedItemId, selectedTextureId, gender, lookKey, pedTextures]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Freemode-gubben: valda delar ur GTA (t.ex. ansikte 5 eller tröja 3 färg b) plockas ut och byggs
+  // med Sollumz första gången, och läggs sedan på gubben i stället för grunddelen.
+  useEffect(() => {
+    const c = ctx.current
+    const custom = isCustomPed(gender)
+    const wanted = new Map()
+    if (!custom && desktop) for (const [comp, ch] of Object.entries(look)) if (ch && ch.slot >= 0) wanted.set(comp, `${gender}:${comp}:${ch.slot}:${ch.letter || 'a'}`)
+    for (const [comp, part] of c.lookParts) {
+      if (wanted.get(comp) === part.key) continue
+      part.obj?.removeFromParent()
+      c.lookParts.delete(comp)
+    }
+    let alive = true
+    ;(async () => {
+      for (const [comp, key] of wanted) {
+        if (c.lookParts.has(comp)) continue
+        const part = { key, obj: null }
+        c.lookParts.set(comp, part)
+        const ch = look[comp]
+        useStore.getState().setPedBusy(t('Hämtar {p} {n} ur GTA…', { p: partLabel(comp, t).toLowerCase(), n: ch.slot }))
+        try {
+          const res = await desktop.gtaPedPart({ gender, comp, slot: ch.slot, letter: ch.letter || 'a' })
+          if (!alive || c.lookParts.get(comp) !== part) continue
+          const obj = await loadModel(new File([res.glb], `${comp}.glb`))
+          const canvas = res.ytd ? (await fileToCanvases(new File([res.ytd.data], res.ytd.name)).catch(() => []))[0]?.canvas : null
+          if (!alive || c.lookParts.get(comp) !== part) continue
+          obj.traverse((m) => {
+            if (!m.isMesh) return
+            const own = m.material?.map || null
+            const map = canvas ? new THREE.CanvasTexture(canvas) : own
+            if (map) {
+              map.colorSpace = THREE.SRGBColorSpace
+              map.flipY = canvas ? false : map.flipY
+              map.wrapS = map.wrapT = THREE.RepeatWrapping
+            }
+            m.material = new THREE.MeshPhysicalMaterial({ map, normalMap: m.material?.normalMap || null, color: map ? 0xffffff : 0xb08a72, roughness: 0.75, sheen: 0.3, sheenRoughness: 0.7, side: THREE.DoubleSide, alphaTest: 0.35 })
+            m.userData.part = { comp, slot: ch.slot }
+          })
+          part.obj = obj
+          c.lookGroup.add(obj)
+          updatePedParts()
+        } catch (e) {
+          c.lookParts.delete(comp)
+          if (alive) notify(`${partLabel(comp, t)} ${ch.slot}: ${cleanError(e)}`, 'error')
+        } finally {
+          useStore.getState().setPedBusy(false)
+        }
+      }
+    })()
+    updatePedParts()
+    return () => {
+      alive = false
+    }
+  }, [lookKey, gender]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Som i spelet: ett eget plagg i samma del (t.ex. ett eget huvud) ersätter pedens. Delar som
-  // användaren dolt (dubbelklick eller menyn Kroppsdelar) visas inte heller.
+  // dolts (dubbelklick eller Ped-menyn) eller bytts mot en annan del ur GTA visas inte heller.
   const shownCats = items.filter((i) => i.gender === gender && i.preview && !i.hidden && (onlySelected ? i.id === selectedItemId : outfit[`${i.gender}:${i.category}`] === i.id)).map((i) => i.category)
-  const hidden = hiddenParts[gender] || []
-  const partsKey = `${hidden.join(',')}|${[...new Set(shownCats)].sort().join(',')}`
+  const partsKey = `${lookKey}|${[...new Set(shownCats)].sort().join(',')}|${showBody}`
   function updatePedParts() {
     const c = ctx.current
     if (!c.ped) return
-    const off = new Set([...hidden, ...shownCats])
+    const custom = isCustomPed(gender)
+    const covered = new Set(shownCats)
+    const off = new Set([...shownCats, ...Object.entries(look).filter(([, ch]) => ch && (ch.slot < 0 || !custom)).map(([comp]) => comp)])
     c.ped.traverse((m) => {
       if (m.isMesh && m.userData.part) m.visible = m.userData.slotVisible !== false && !off.has(m.userData.part.comp)
     })
+    c.lookGroup.visible = showBody
+    for (const [comp, part] of c.lookParts) if (part.obj) part.obj.visible = !covered.has(comp)
   }
   useEffect(updatePedParts, [partsKey, pedReady]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const togglePart = (comp, hide) =>
-    setHiddenParts((h) => {
-      const cur = new Set(h[gender] || [])
-      hide ? cur.add(comp) : cur.delete(comp)
-      return { ...h, [gender]: [...cur] }
-    })
   useEffect(() => {
     ctx.current.onPartPick = (comp) => {
-      togglePart(comp, true)
-      notify(t('{p} är dold. Visa igen under Kroppsdelar.', { p: partLabel(comp, t) }))
+      setPedPart(gender, comp, { slot: -1 })
+      notify(t('{p} är dold. Visa igen under Ped.', { p: partLabel(comp, t) }))
     }
   })
 
@@ -445,29 +498,13 @@ export default function Viewer3D() {
       <div ref={mountRef} className="absolute inset-0" />
       <div className="absolute left-3 right-3 top-3 flex flex-wrap gap-1.5">
         <Toggle on={showBody} set={setShowBody}>{t('Kropp')}</Toggle>
-        {showBody && pedParts.length > 0 && (
+        {showBody && (pedParts.length > 0 || Object.keys(look).length > 0) && (
           <div className="relative">
-            <Toggle on={partsMenu || hidden.length > 0} set={() => setPartsMenu((m) => !m)}>
-              {t('Kroppsdelar')}
-              {hidden.length > 0 && <span className="ml-1 text-accent">({hidden.length})</span>}
+            <Toggle on={pedMenu || Object.keys(look).length > 0} set={() => setPedMenu((m) => !m)}>
+              {t('Ped')}
+              {Object.keys(look).length > 0 && <span className="ml-1 text-accent">({Object.keys(look).length})</span>}
             </Toggle>
-            {partsMenu && (
-              <div className="absolute left-0 top-8 z-10 w-52 rounded-md border border-ink-700 bg-ink-900 p-2 shadow-lg">
-                {pedParts.map((comp) => (
-                  <label key={comp} className="flex items-center gap-2 rounded px-1.5 py-1 text-xs text-ink-200 hover:bg-ink-800">
-                    <input type="checkbox" checked={!hidden.includes(comp)} onChange={(e) => togglePart(comp, !e.target.checked)} />
-                    {partLabel(comp, t)}
-                    {shownCats.includes(comp) && <span className="ml-auto text-[10px] text-ink-500">{t('ersatt')}</span>}
-                  </label>
-                ))}
-                <p className="mt-1.5 border-t border-ink-800 px-1.5 pt-1.5 text-[11px] leading-relaxed text-ink-500">{t('Tips: dubbelklicka på en del av peden för att dölja den.')}</p>
-                {hidden.length > 0 && (
-                  <Button size="sm" variant="ghost" className="mt-1 w-full" onClick={() => setHiddenParts((h) => ({ ...h, [gender]: [] }))}>
-                    {t('Visa alla')}
-                  </Button>
-                )}
-              </div>
-            )}
+            {pedMenu && <PedPanel gender={gender} baseParts={pedParts} ped={ctx.current?.ped} replaced={shownCats} onClose={() => setPedMenu(false)} />}
           </div>
         )}
         <Toggle on={!onlySelected} set={(on) => setOnlySelected(!on)}>{t('Visa hela outfiten')}</Toggle>
@@ -531,6 +568,22 @@ export default function Viewer3D() {
       )}
     </div>
   )
+}
+
+function liveMap(c, id, canvas, version) {
+  let map = c.textures.get(id)
+  if (!map || map.image !== canvas) {
+    map = new THREE.CanvasTexture(canvas)
+    map.colorSpace = THREE.SRGBColorSpace
+    map.flipY = false
+    map.wrapS = map.wrapT = THREE.RepeatWrapping
+    c.textures.set(id, map)
+  }
+  if (map.userData.version !== version) {
+    map.userData.version = version
+    map.needsUpdate = true
+  }
+  return map
 }
 
 // Lägger passformen på plagget: flytt/rotation/skala runt mittpunkten och "blås upp" längs normalerna.
@@ -628,9 +681,6 @@ function placeholderBody() {
   part(new THREE.CapsuleGeometry(0.08, 0.75, 4, 12), 0.1, 0.48, 0)
   return g
 }
-
-const partLabel = (comp, t) =>
-  ({ head: t('Huvud & ansikte'), uppr: t('Överkropp'), lowr: t('Ben'), feet: t('Fötter'), hand: t('Händer') })[comp] || t(categoryByKey(comp)?.label || comp)
 
 function Toggle({ on, set, children }) {
   return (

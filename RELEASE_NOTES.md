@@ -23,6 +23,11 @@ Appen är inte signerad med ett köpt certifikat.
 - **Edge**: ··· vid nedladdningen › Behåll › Visa mer › Behåll ändå. **Chrome**: Ctrl+J › Behåll farlig fil.
 - **Smart App Control** (Windows 11) kan stoppa osignerade program helt. Använd då den portabla versionen eller stäng av Smart App Control under Windows-säkerhet › App- och webbläsarkontroll.
 
+### Nytt i 1.0.8
+- **Byt ansikte, frisyr och kläder på peden** – menyn **Ped** i 3D-vyn: välj nummer och färg för varje del (46 ansikten, frisyrer, tröjor, byxor, skor …). På freemode-gubbarna hämtas delarna ur ditt eget GTA första gången; på egna peds väljer du bland pedens egna varianter
+- Välj **Dold** för att ta bort en del, eller dubbelklicka på den. **Återställ peden** tar tillbaka grundutseendet
+- Utseendet sparas till nästa gång och påverkar bara 3D-vyn – inte exporten
+
 ### Nytt i 1.0.7
 - **Dölj pedens delar** – dubbelklicka på ansiktet (eller överkropp, ben, fötter) för att dölja det, eller använd menyn **Kroppsdelar** i 3D-vyn. **Visa alla** tar tillbaka allt
 - Ett eget plagg i samma del (t.ex. ett eget huvud eller ansikte) ersätter pedens automatiskt i 3D, som i spelet

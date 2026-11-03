@@ -10,6 +10,22 @@ const DEFAULT_PACK = { id: 'pk0', name: 'mina_klader', template: '{name}', overr
 // Paketnamnet (dlcName) för ett kön: egen överskrivning eller mallen.
 export const packDlc = (pack, gender) => slugify(pack.overrides?.[gender] || '') || applyTemplate(pack.template, pack.name, gender)
 
+function readLook() {
+  try {
+    return JSON.parse(localStorage.getItem('alex.pedLook')) || {}
+  } catch {
+    return {}
+  }
+}
+function saveLook(pedLook) {
+  try {
+    localStorage.setItem('alex.pedLook', JSON.stringify(pedLook))
+  } catch {
+    // Utan lagring gäller utseendet bara tills appen stängs.
+  }
+  return pedLook
+}
+
 export const useStore = create((set, get) => ({
   projectName: 'mina_klader',
   // Historik: projectId = mappen i appens projektlista. screen: 'home' (startsidan) eller 'editor'.
@@ -106,6 +122,17 @@ export const useStore = create((set, get) => ({
   setPedTextures: (gender, list) => set((s) => ({ pedTextures: { ...s.pedTextures, [gender]: list } })),
   pedBusy: false,
   setPedBusy: (pedBusy) => set({ pedBusy }),
+  // Pedens utseende i 3D per ped och del: { male: { head: { slot: 5, letter: 'a' }, jbib: null } }.
+  // slot -1 = delen dold. Påverkar bara förhandsvisningen, inte exporten. Sparas i webbläsarlagringen.
+  pedLook: readLook(),
+  setPedPart: (gender, comp, choice) =>
+    set((s) => {
+      const forPed = { ...s.pedLook[gender] }
+      if (choice) forPed[comp] = choice
+      else delete forPed[comp]
+      return { pedLook: saveLook({ ...s.pedLook, [gender]: forPed }) }
+    }),
+  resetPedLook: (gender) => set((s) => ({ pedLook: saveLook({ ...s.pedLook, [gender]: {} }) })),
   settingsOpen: false,
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   blender: null, // { ok, mode, blender, error }

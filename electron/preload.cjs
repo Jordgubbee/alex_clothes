@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('alex', {
   buildYmt: (jobs) => ipcRenderer.invoke('ymt:build', jobs),
   mergeTextures: (args) => ipcRenderer.invoke('blender:merge', args),
   fitModel: (args) => ipcRenderer.invoke('blender:fit', args),
+  gtaPedIndex: (gender) => ipcRenderer.invoke('ped:gtaIndex', gender),
+  gtaPedPart: (args) => ipcRenderer.invoke('ped:gtaPart', args),
   editInBlender: (itemId, files, gender) => ipcRenderer.invoke('blender:edit', { itemId, files, gender }),
   onEdited: (fn) => {
     const h = (_e, d) => fn(d)

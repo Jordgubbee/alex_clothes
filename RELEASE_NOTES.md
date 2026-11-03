@@ -23,6 +23,12 @@ Appen är inte signerad med ett köpt certifikat.
 - **Edge**: ··· vid nedladdningen › Behåll › Visa mer › Behåll ändå. **Chrome**: Ctrl+J › Behåll farlig fil.
 - **Smart App Control** (Windows 11) kan stoppa osignerade program helt. Använd då den portabla versionen eller stäng av Smart App Control under Windows-säkerhet › App- och webbläsarkontroll.
 
+### Nytt i 1.0.5
+- **Flytta loggor mellan texturer** – välj en logga eller text och "Lägg på andra texturer…": kopiera eller flytta den till andra färgvarianter eller plagg, på exakt samma plats och i samma storlek
+- **Gör inbrända loggor till lager** – markera en logga i texturen och välj "Gör till lager" eller "Klipp ut till lager"
+- **Egna peds** – lägg till vilken ped som helst (GTA-ped eller addon-ped) under Inställningar › Egna peds, se den i 3D och gör egna texturer till dess kläder och ansikten; exporten bygger om pedens .ytd med bara dina ändringar
+- Ny kategori: Huvud & ansikte
+
 ### Nytt i 1.0.4
 - **Startsida med historik** – allt sparas automatiskt; öppna gamla projekt eller skapa nya
 - **Export rättad** – spara direkt i en mapp (t.ex. serverns resources) eller som .zip, med förlopp

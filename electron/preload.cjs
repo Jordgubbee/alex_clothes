@@ -20,6 +20,10 @@ contextBridge.exposeInMainWorld('alex', {
     return () => ipcRenderer.removeListener('app:closing', h)
   },
   closeNow: () => ipcRenderer.invoke('app:closeNow'),
+  listCustomPeds: () => ipcRenderer.invoke('peds:listCustom'),
+  addCustomPed: () => ipcRenderer.invoke('peds:addCustom'),
+  customPedFiles: (model) => ipcRenderer.invoke('peds:customFiles', model),
+  removeCustomPed: (model) => ipcRenderer.invoke('peds:removeCustom', model),
   listProjects: () => ipcRenderer.invoke('projects:list'),
   saveProjectData: (meta, data) => ipcRenderer.invoke('projects:save', { meta, data }),
   loadProjectData: (id) => ipcRenderer.invoke('projects:load', id),
@@ -27,6 +31,7 @@ contextBridge.exposeInMainWorld('alex', {
   renameProject: (id, name) => ipcRenderer.invoke('projects:rename', { id, name }),
   saveZip: (name, data) => ipcRenderer.invoke('export:saveZip', { name, data }),
   exportFolder: (name, files) => ipcRenderer.invoke('export:folder', { name, files }),
+  patchYtd: (original, name, replacements) => ipcRenderer.invoke('blender:ytdPatch', { original, name, replacements }),
   buildYmt: (jobs) => ipcRenderer.invoke('ymt:build', jobs),
   mergeTextures: (args) => ipcRenderer.invoke('blender:merge', args),
   editInBlender: (itemId, files, gender) => ipcRenderer.invoke('blender:edit', { itemId, files, gender }),

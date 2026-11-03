@@ -100,7 +100,7 @@ export default function Sidebar() {
                   <span className="block truncate text-[11px] text-ink-400">
                     {exportMode === 'addon' && packFilter === 'all' ? `${packName(i.packId)} · ` : ''}
                     {i.textures.length} {i.textures.length === 1 ? t('textur') : t('texturer')}
-                    {!i.ydd && <span className="text-accent"> · {t('saknar .ydd')}</span>}
+                    {!i.ydd && !i.compound && <span className="text-accent"> · {t('saknar .ydd')}</span>}
                     {(i.materials?.length || 0) > 1 && <span className="text-accent"> · {t('{n} texturer i modellen', { n: i.materials.length })}</span>}
                   </span>
                 </span>

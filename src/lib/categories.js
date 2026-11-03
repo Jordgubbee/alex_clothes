@@ -11,6 +11,7 @@ export const COMPONENTS = [
   { id: 7, key: 'teef', label: 'Halsband & slips', group: 'Accessoarer' },
   { id: 3, key: 'uppr', label: 'Armar', group: 'Kropp' },
   { id: 2, key: 'hair', label: 'Frisyrer', group: 'Kropp' },
+  { id: 0, key: 'head', label: 'Huvud & ansikte', group: 'Kropp' },
 ]
 
 export const PROPS = [
@@ -35,11 +36,21 @@ export const PEDS = {
   female: { model: 'mp_f_freemode_01', label: 'Tjej' },
 }
 
+// Egna peds (t.ex. s_m_y_cop_01 eller en addon-ped) läggs till i samma register; nyckeln är modellnamnet.
+export const isCustomPed = (gender) => !!PEDS[gender]?.custom
+export function registerPed(model, label = model) {
+  PEDS[model] = { model, label, custom: true }
+}
+export function unregisterPed(model) {
+  if (PEDS[model]?.custom) delete PEDS[model]
+}
+
 const pad3 = (n) => String(n).padStart(3, '0')
 export const variantLetter = (i) => String.fromCharCode(97 + i)
 
 // Filnamnen som GTA/FiveM förväntar sig för att ersätta ett plagg via stream-mappen.
-export function streamNames({ gender, category, slot, textureIndex = 0, skin = false }) {
+// suffix: texturens ändelse (uni, whi, bla …). Egna peds behåller sina egna ändelser.
+export function streamNames({ gender, category, slot, textureIndex = 0, skin = false, suffix = null }) {
   const ped = PEDS[gender].model
   const cat = categoryByKey(category)
   const n = pad3(slot)
@@ -51,7 +62,7 @@ export function streamNames({ gender, category, slot, textureIndex = 0, skin = f
   }
   return {
     model: `${ped}^${cat.key}_${n}_${skin ? 'r' : 'u'}.ydd`,
-    texture: `${ped}^${cat.key}_diff_${n}_${variantLetter(textureIndex)}_${skin ? 'whi' : 'uni'}.ytd`,
+    texture: `${ped}^${cat.key}_diff_${n}_${variantLetter(textureIndex)}_${suffix || (skin ? 'whi' : 'uni')}.ytd`,
   }
 }
 
@@ -90,7 +101,7 @@ export const applyTemplate = (tpl, name, gender) => tpl.replace('{name}', slugif
 // Försöker läsa kategori + nummer ur ett befintligt GTA-filnamn, t.ex. "jbib_005_u.ydd".
 export function guessFromFilename(name) {
   const lower = name.toLowerCase()
-  const m = lower.match(/(p_head|p_eyes|p_ears|p_lwrist|p_rwrist|berd|hair|uppr|lowr|hand|feet|teef|accs|task|decl|jbib)(?:_diff)?_(\d{3})/)
+  const m = lower.match(/(p_head|p_eyes|p_ears|p_lwrist|p_rwrist|head|berd|hair|uppr|lowr|hand|feet|teef|accs|task|decl|jbib)(?:_diff)?_(\d{3})/)
   if (!m) return null
   const g = { category: m[1], slot: parseInt(m[2], 10), skin: /_r\.ydd$|_whi\.ytd$/.test(lower) }
   if (lower.includes('mp_f_freemode')) g.gender = 'female'
@@ -98,5 +109,10 @@ export function guessFromFilename(name) {
   // Addon-paket: mp_f_freemode_01_ems_f_clothes^... eller mp_f_freemode_01_p_ems_f_clothes^...
   const dlc = lower.match(/mp_[mf]_freemode_01_(?:p_)?([a-z0-9_]+)\^/)
   if (dlc) g.dlc = dlc[1]
+  // Egen ped: s_m_y_cop_01^uppr_000_u.ydd (eller s_m_y_cop_01_p^p_head_000.ydd för props).
+  const prefix = lower.match(/^([a-z0-9_]+?)(?:_p)?\^/)
+  if (!g.gender && prefix && isCustomPed(prefix[1])) g.gender = prefix[1]
+  const suffix = lower.match(/_diff_\d{3}_[a-z]_([a-z]+)\.ytd$/)
+  if (suffix) g.texSuffix = suffix[1]
   return g
 }

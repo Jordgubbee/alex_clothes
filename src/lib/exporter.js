@@ -1,5 +1,5 @@
 import JSZip from 'jszip'
-import { streamNames, addonNames, categoryByKey, PEDS, ALL_CATEGORIES } from './categories'
+import { streamNames, addonNames, categoryByKey, PEDS, ALL_CATEGORIES, isCustomPed } from './categories'
 import { canvasToBlob, extOf } from './images'
 import { writeDDSDXT5 } from './dds'
 import { desktop, cleanError } from './desktop'
@@ -27,6 +27,19 @@ const itemLabel = (item) => `${t(categoryByKey(item.category).label)} · ${item.
  */
 // layout: 'packs' = stream/<paket>/[kön]/<kategori>/ (som Durty/EVRP), 'flat' = allt direkt i stream/.
 // lowercase: gör alla namn till små bokstäver (annars behålls stora och små som du skrev dem).
+// Peds med alla texturer i en .ytd: en patch per fil, med de plagg som hör dit.
+function compoundPatches(items, L) {
+  const map = new Map()
+  for (const item of items.filter((i) => i.compound)) {
+    const ped = PEDS[item.gender]?.model || item.gender
+    const file = `${ped}${item.compound.prop ? '_p' : ''}.ytd`
+    const key = `${item.gender}:${file}`
+    if (!map.has(key)) map.set(key, { gender: item.gender, ped, file: item.compound.file, path: L(`stream/${ped}/${file}`), items: [] })
+    map.get(key).items.push(item)
+  }
+  return [...map.values()]
+}
+
 export function planExport({ items, packs, exportMode, layout = 'packs', lowercase = false }) {
   const L = (p) => (lowercase ? p.toLowerCase() : p)
   const problems = []
@@ -37,7 +50,7 @@ export function planExport({ items, packs, exportMode, layout = 'packs', lowerca
 
   for (const item of items) {
     const label = itemLabel(item)
-    if (!item.ydd) err(t('{x}: saknar .ydd-modell.', { x: label }))
+    if (!item.ydd && !item.compound) err(t('{x}: saknar .ydd-modell.', { x: label }))
     if (!item.textures.length) err(t('{x}: saknar texturer.', { x: label }))
     if (item.textures.length > 26) err(t('{x}: max 26 färgvarianter (a–z).', { x: label }))
     if (item.ydd && item.ydd.size > 16 * MB) warn(t('{x}: modellen är över 16 MB och kan ge "oversized asset" i FiveM.', { x: label }))
@@ -50,20 +63,38 @@ export function planExport({ items, packs, exportMode, layout = 'packs', lowerca
     }
   }
 
+  const patches = compoundPatches(items, L)
+  items = items.filter((i) => !i.compound)
+
   if (exportMode === 'replace') {
     const seen = new Set()
     for (const item of items) {
       const key = `${item.gender}-${item.category}-${item.slot}`
       if (seen.has(key)) err(t('{x}: nummer {n} används av två plagg.', { x: itemLabel(item), n: item.slot }))
       seen.add(key)
-      const base = { gender: item.gender, category: item.category, slot: item.slot, skin: item.skin }
+      const base = { gender: item.gender, category: item.category, slot: item.slot, skin: item.skin, suffix: isCustomPed(item.gender) ? item.texSuffix : null }
       entries.push({
         item,
         model: L(`stream/${streamNames(base).model}`),
         textures: item.textures.map((_, i) => L(`stream/${streamNames({ ...base, textureIndex: i }).texture}`)),
       })
     }
-    return { mode: 'replace', entries, groups, problems }
+    return { mode: 'replace', entries, groups, patches, problems }
+  }
+
+  // Egna peds: deras kläder ersätter pedens egna med samma nummer och filnamn (ingen .ymt behövs).
+  const seenCustom = new Set()
+  for (const item of items.filter((i) => isCustomPed(i.gender))) {
+    const key = `${item.gender}-${item.category}-${item.slot}`
+    if (seenCustom.has(key)) err(t('{x}: nummer {n} används av två plagg.', { x: itemLabel(item), n: item.slot }))
+    seenCustom.add(key)
+    const base = { gender: item.gender, category: item.category, slot: item.slot, skin: item.skin, suffix: item.texSuffix }
+    const dir = `stream/${L(PEDS[item.gender].model)}`
+    entries.push({
+      item,
+      model: L(`${dir}/${streamNames(base).model}`),
+      textures: item.textures.map((_, i) => L(`${dir}/${streamNames({ ...base, textureIndex: i }).texture}`)),
+    })
   }
 
   // Addon: ett eget paket per (paket, kön) med .ymt + .meta, numrerat från 000 i varje kategori.
@@ -103,7 +134,7 @@ export function planExport({ items, packs, exportMode, layout = 'packs', lowerca
       groups.push(group)
     }
   }
-  return { mode: 'addon', entries, groups, problems }
+  return { mode: 'addon', entries, groups, patches, problems }
 }
 
 const MANIFEST = (name, metas) => `fx_version 'cerulean'
@@ -211,6 +242,28 @@ export async function exportResource({ projectName, items, packs, exportMode, la
       root.file(`${dir}/${texName}.png`, await canvasToBlob(tex.canvas))
       pack.push({ dds: `${dir}/${texName}.dds`, ytd: path })
     }
+  }
+
+  // Peds med alla texturer i en fil: bygg om pedens .ytd med bara de ändrade texturerna utbytta.
+  for (const patch of plan.patches || []) {
+    const replacements = []
+    for (const item of patch.items) {
+      for (let i = 0; i < item.textures.length; i++) {
+        const tex = item.textures[i]
+        if (!tex.edited && tex.pending) continue
+        if (!tex.canvas) await ensureTextures(item)
+        const name = tex.pending ? tex.name : `${item.category}_diff_${String(item.slot).padStart(3, '0')}_${String.fromCharCode(97 + i)}${item.texSuffix ? `_${item.texSuffix}` : ''}`
+        const dds = writeDDSDXT5(tex.canvas.getContext('2d').getImageData(0, 0, tex.canvas.width, tex.canvas.height))
+        replacements.push({ name: `${name}.dds`, data: new Uint8Array(dds) })
+      }
+    }
+    onProgress?.(t('Bygger {f}…', { f: patch.path.split('/').pop() }), 0.82)
+    const original = { name: patch.file.name, data: new Uint8Array(await patch.file.arrayBuffer()) }
+    if (!replacements.length) root.file(patch.path, original.data)
+    else if (desktop) {
+      root.file(patch.path, await desktop.patchYtd(original, patch.path.split('/').pop().replace(/\.ytd$/i, ''), replacements))
+      built += replacements.length
+    } else throw new Error(t('Addon-paket kräver skrivbordsappen (för .ymt).'))
   }
 
   root.file('fxmanifest.lua', MANIFEST(projectName, plan.groups.map((g) => g.meta)))

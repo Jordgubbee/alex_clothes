@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../lib/store'
-import { desktop, importPedFromGta, pedsFromGta, pedFromFolder } from '../lib/desktop'
+import { desktop, importPedFromGta, pedsFromGta, pedFromFolder, addCustomPed, importCustomPedClothes, removeCustomPed } from '../lib/desktop'
 import { PEDS } from '../lib/categories'
 import { LANGUAGES, useT } from '../lib/i18n'
 import { Button, FilePick } from './ui'
@@ -14,6 +14,7 @@ export default function SettingsDialog() {
   const setBasePed = useStore((s) => s.setBasePed)
   const setPedTextures = useStore((s) => s.setPedTextures)
   const pedBusy = useStore((s) => s.pedBusy)
+  const customPeds = useStore((s) => s.customPeds)
   const lang = useStore((s) => s.lang)
   const setLang = useStore((s) => s.setLang)
   const [checking, setChecking] = useState(false)
@@ -98,7 +99,7 @@ export default function SettingsDialog() {
                 {pedBusy || t('Hämta båda från mitt GTA')}
               </Button>
             </div>
-            {Object.entries(PEDS).map(([g, p]) => (
+            {Object.entries(PEDS).filter(([, p]) => !p.custom).map(([g, p]) => (
               <div key={g} className="mb-1.5 flex items-center gap-2 text-xs">
                 <span className="w-16 text-ink-300">{t(p.label)}</span>
                 <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-ink-500">{basePed[g]?.name || t('Ingen')}</span>
@@ -124,6 +125,28 @@ export default function SettingsDialog() {
               </div>
             ))}
             <p className="mt-2 text-[11px] leading-relaxed text-ink-500">{t('Manuellt från OpenIV: exportera mp_m_freemode_01.yft och mappen mp_m_freemode_01 ur x64v.rpf › models › cdimages › streamedpeds_mp.rpf och välj den med Mapp….')}</p>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-ink-200">{t('Egna peds')}</h3>
+              <Button size="sm" variant="primary" disabled={!!pedBusy || !blender?.ok} onClick={addCustomPed}>
+                {pedBusy || t('Lägg till ped…')}
+              </Button>
+            </div>
+            {customPeds.length === 0 && <p className="text-xs text-ink-500">{t('Inga egna peds än.')}</p>}
+            {customPeds.map((m) => (
+              <div key={m} className="mb-1.5 flex items-center gap-2 text-xs">
+                <span className="min-w-0 flex-1 truncate font-mono text-ink-200">{m}</span>
+                <Button size="sm" variant="ghost" onClick={() => { setOpen(false); importCustomPedClothes(m) }}>
+                  {t('Importera pedens kläder')}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => confirm(t('Ta bort {p}?', { p: m })) && removeCustomPed(m)}>
+                  {t('Ta bort')}
+                </Button>
+              </div>
+            ))}
+            <p className="mt-2 text-[11px] leading-relaxed text-ink-500">{t('Välj en mapp med pedens filer (.yft, .ydd, .ytd) – exporterad från OpenIV/CodeWalker eller en addon-peds stream-mapp. Peden visas i 3D, och du kan göra egna texturer till dess kläder. Exporten ersätter pedens egna texturer med samma filnamn.')}</p>
           </div>
         </div>
 

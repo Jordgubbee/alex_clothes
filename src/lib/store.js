@@ -100,6 +100,9 @@ export const useStore = create((set, get) => ({
   setActiveCategory: (activeCategory) => set({ activeCategory }),
   setBasePed: (gender, file) => set((s) => ({ basePed: { ...s.basePed, [gender]: file } })),
   pedTextures: { male: [], female: [] },
+  // Egna peds (modellnamn), t.ex. ['s_m_y_cop_01'].
+  customPeds: [],
+  setCustomPeds: (customPeds) => set({ customPeds }),
   setPedTextures: (gender, list) => set((s) => ({ pedTextures: { ...s.pedTextures, [gender]: list } })),
   pedBusy: false,
   setPedBusy: (pedBusy) => set({ pedBusy }),

@@ -9,6 +9,7 @@ import { useStore } from '../lib/store'
 import { extOf } from '../lib/images'
 import { on, emit, uvCache } from '../lib/bus'
 import { desktop, importPedFromGta, pedsFromGta, pedFromFolder, texKey, texFamily } from '../lib/desktop'
+import { isCustomPed } from '../lib/categories'
 import { Button, FilePick } from './ui'
 import { useT } from '../lib/i18n'
 
@@ -72,6 +73,7 @@ export default function Viewer3D() {
   const [wire, setWire] = useState(false)
   const [spin, setSpin] = useState(false)
   const [light, setLight] = useState('studio')
+  const [pedReady, setPedReady] = useState(0)
 
   // ---- Scen ----
   useEffect(() => {
@@ -167,9 +169,12 @@ export default function Viewer3D() {
     loadModel(file)
       .then((obj) => {
         if (!alive) return
-        const byName = new Map(pedTextures[gender].map((t) => [texKey(t.name), t.canvas]))
+        const byName = new Map((pedTextures[gender] || []).map((t) => [texKey(t.name), t.canvas]))
         obj.traverse((m) => {
           if (!m.isMesh) return
+          // Del och nummer ur materialnamnet (uppr_diff_000_a_whi) – används för peds med alla delar i en fil.
+          const part = texKey(m.material?.name || '').match(/^([a-z_]+?)_diff_(\d{3})/)
+          if (part) m.userData.part = { comp: part[1], slot: parseInt(part[2], 10) }
           const canvas = byName.get(texKey(m.material?.name || ''))
           const map = canvas ? new THREE.CanvasTexture(canvas) : m.material?.map || null
           if (map) map.wrapS = map.wrapT = THREE.RepeatWrapping
@@ -178,6 +183,7 @@ export default function Viewer3D() {
             map.flipY = canvas ? !fromGta : map.flipY
           }
           m.material = new THREE.MeshPhysicalMaterial({ map, normalMap: m.material?.normalMap || null, color: map ? 0xffffff : 0xb08a72, roughness: 0.7, sheen: 0.25, sheenRoughness: 0.6, side: THREE.DoubleSide, alphaTest: 0.35 })
+          m.userData.pedMap = map
         })
         if (fromGta) {
           // Fötterna på golvet, oavsett exakt rot-höjd.
@@ -187,6 +193,7 @@ export default function Viewer3D() {
         } else c.plainRoot.add(obj)
         obj.visible = showBody
         c.ped = obj
+        setPedReady((n) => n + 1)
       })
       .catch((e) => notify(`${t('Basmodell')}: ${e.message}`, 'error'))
     return () => {
@@ -198,6 +205,46 @@ export default function Viewer3D() {
   useEffect(() => {
     if (ctx.current.ped) ctx.current.ped.visible = showBody
   }, [showBody])
+
+  // Egna peds med alla delar i en fil: visa en variant per del (vald eller den första) och lägg den
+  // redigerade texturen direkt på pedens kropp.
+  useEffect(() => {
+    const c = ctx.current
+    if (!c.ped || !isCustomPed(gender)) return
+    const meshes = []
+    c.ped.traverse((m) => m.isMesh && m.userData.part && meshes.push(m))
+    if (!meshes.length) return
+    const first = {}
+    for (const m of meshes) first[m.userData.part.comp] = Math.min(first[m.userData.part.comp] ?? 999, m.userData.part.slot)
+    const sel = items.find((i) => i.id === selectedItemId && i.gender === gender)
+    for (const m of meshes) {
+      const { comp, slot } = m.userData.part
+      const showSlot = sel && sel.category === comp && meshes.some((x) => x.userData.part.comp === comp && x.userData.part.slot === sel.slot) ? sel.slot : first[comp]
+      m.visible = slot === showSlot
+      let map = m.userData.pedMap
+      if (sel && sel.category === comp && slot === sel.slot) {
+        const tex = sel.textures.find((x) => x.id === selectedTextureId) || sel.textures[0]
+        if (tex?.canvas) {
+          map = c.textures.get(tex.id)
+          if (!map || map.image !== tex.canvas) {
+            map = new THREE.CanvasTexture(tex.canvas)
+            map.colorSpace = THREE.SRGBColorSpace
+            map.flipY = false
+            map.wrapS = map.wrapT = THREE.RepeatWrapping
+            c.textures.set(tex.id, map)
+          }
+          if (map.userData.version !== tex.version) {
+            map.userData.version = tex.version
+            map.needsUpdate = true
+          }
+        }
+      }
+      if (m.material.map !== map) {
+        m.material.map = map
+        m.material.needsUpdate = true
+      }
+    }
+  }, [pedReady, items, selectedItemId, selectedTextureId, gender])
 
   // ---- Plagg ----
   useEffect(() => {

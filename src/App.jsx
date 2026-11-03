@@ -25,6 +25,7 @@ export default function App() {
   const toast = useStore((s) => s.toast)
   const notify = useStore((s) => s.notify)
   const screen = useStore((s) => s.screen)
+  const customPeds = useStore((s) => s.customPeds)
   const dirty = useStore((s) => s.dirty)
   const lastSaved = useStore((s) => s.lastSaved)
   const settingsOpen = useStore((s) => s.settingsOpen)
@@ -103,7 +104,11 @@ export default function App() {
         </>)}
         <div className="flex-1" />
         {screen === 'editor' && (<>
-        <Segmented value={gender} onChange={setGender} options={[{ value: 'male', label: t('Kille') }, { value: 'female', label: t('Tjej') }]} />
+        <Segmented
+          value={gender}
+          onChange={setGender}
+          options={[{ value: 'male', label: t('Kille') }, { value: 'female', label: t('Tjej') }, ...customPeds.map((m) => ({ value: m, label: m }))]}
+        />
         <Segmented value={view} onChange={setView} options={[{ value: '2d', label: '2D' }, { value: 'split', label: '2D + 3D' }, { value: '3d', label: '3D' }]} />
         <div className="flex-1" />
         <Button variant="ghost" onClick={() => saveToHistory()} title="Ctrl+S">

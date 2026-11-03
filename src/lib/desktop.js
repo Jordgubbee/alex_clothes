@@ -4,6 +4,8 @@ import { fileToCanvases, baseName, canvasFrom } from './images'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { t } from './i18n'
 import { ensureTextures } from './loader'
+import { registerPed, unregisterPed } from './categories'
+import { importFiles, importCompoundYtd } from './importer'
 
 export const desktop = typeof window !== 'undefined' ? window.alex || null : null
 
@@ -44,6 +46,7 @@ export const previewFromYdd = (itemId) => previewMany([itemId])
 // Laddar sparade gubbar. Finns inga än hämtas de automatiskt ur GTA – de ska alltid finnas.
 export async function loadSavedPeds(blender) {
   if (!desktop) return
+  await loadCustomPeds()
   let missing = false
   for (const g of ['male', 'female']) {
     const ped = await desktop.getPed(g)
@@ -53,6 +56,61 @@ export async function loadSavedPeds(blender) {
   if (!missing || !blender?.ok) return
   const settings = await desktop.getSettings()
   if (settings.gtaPath) await pedsFromGta()
+}
+
+// ---- Egna peds ----
+export async function loadCustomPeds() {
+  const list = await desktop.listCustomPeds()
+  for (const p of list) registerPed(p.model, p.label)
+  useStore.getState().setCustomPeds(list.map((p) => p.model))
+  for (const p of list) {
+    const ped = await desktop.getPed(p.model)
+    if (ped) await applyPed(p.model, ped)
+  }
+}
+
+export async function addCustomPed() {
+  const st = useStore.getState()
+  st.setPedBusy(t('Sollumz bygger peden…'))
+  try {
+    const meta = await desktop.addCustomPed()
+    if (!meta) return
+    registerPed(meta.model, meta.label)
+    useStore.getState().setCustomPeds([...new Set([...useStore.getState().customPeds, meta.model])])
+    await applyPed(meta.model, await desktop.getPed(meta.model))
+    useStore.getState().setGender(meta.model)
+    st.notify(t('{p} är tillagd. Importera pedens kläder för att göra egna texturer.', { p: meta.model }))
+  } catch (e) {
+    st.notify(cleanError(e), 'error')
+  } finally {
+    useStore.getState().setPedBusy(false)
+  }
+}
+
+// Importerar pedens egna kläder (.ydd + .ytd) som plagg, så att man kan göra nya texturer till dem.
+export async function importCustomPedClothes(model) {
+  const all = (await desktop.customPedFiles(model)).map((f) => new File([f.data], f.name))
+  useStore.getState().setGender(model)
+  useStore.getState().setScreen('editor')
+  // Allt i en fil (s_m_y_cop_01.ytd): varje del blir ett plagg. Annars en fil per plagg (uppr_000_u.ydd …).
+  const lower = model.toLowerCase()
+  const compound = all.filter((f) => f.name.toLowerCase() === `${lower}.ytd` || f.name.toLowerCase() === `${lower}_p.ytd`)
+  if (compound.length) {
+    let n = 0
+    for (const f of compound) n += await importCompoundYtd(f, model)
+    useStore.getState().notify(t('{n} plagg från {p}. Klicka på ett plagg för att göra egna texturer.', { n, p: model }))
+    return
+  }
+  await importFiles(all.filter((f) => /\.(ydd|ytd)$/i.test(f.name)), null, { gender: model })
+}
+
+export async function removeCustomPed(model) {
+  await desktop.removeCustomPed(model)
+  unregisterPed(model)
+  const st = useStore.getState()
+  st.setCustomPeds(st.customPeds.filter((m) => m !== model))
+  st.setBasePed(model, null)
+  if (st.gender === model) st.setGender('male')
 }
 
 async function applyPed(gender, ped) {
@@ -65,7 +123,8 @@ async function applyPed(gender, ped) {
       // Hudtexturer som inte går att läsa ersätts av hudfärg.
     }
   }
-  st.setBasePed(gender, new File([ped.glb], `${gender === 'male' ? 'mp_m' : 'mp_f'}_freemode_01.glb`))
+  const model = { male: 'mp_m_freemode_01', female: 'mp_f_freemode_01' }[gender] || gender
+  st.setBasePed(gender, new File([ped.glb], `${model}.glb`))
   st.setPedTextures(gender, textures)
 }
 

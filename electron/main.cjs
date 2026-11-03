@@ -107,7 +107,7 @@ function codewalkerPath() {
 // Sparar en färdig gubbe: 3D-modell + hudtexturer.
 async function savePed(gender, files) {
   const models = files.filter((f) => /\.(ydd|ydr|yft)$/i.test(f.name))
-  if (!models.some((f) => /\.yd[dr]$/i.test(f.name))) throw new Error('Välj minst en .ydd från freemode-mappen (t.ex. head_000_r.ydd, uppr_000_r.ydd, lowr_000_r.ydd).')
+  if (!models.length) throw new Error('Hittade ingen .ydd, .ydr eller .yft i pedens filer.')
   const glb = await convert(models)
   fs.writeFileSync(path.join(PEDS, `${gender}.glb`), glb)
   const tdir = path.join(PEDS, `${gender}_ytd`)
@@ -203,7 +203,8 @@ async function convert(files) {
     const { dir, paths } = writeTemp(files)
     try {
       // .yft används bara som skelett; den ska inte importeras som modell.
-      const args = ['convert', out, ...paths.filter((p) => !p.toLowerCase().endsWith('.yft'))]
+      const models = paths.filter((p) => !p.toLowerCase().endsWith('.yft'))
+      const args = ['convert', out, ...(models.length ? models : paths)]
       // En ny körning om Blender krånglar en gång (t.ex. om en annan Blender höll på samtidigt).
       await runBridge(args).catch(() => runBridge(args))
     } finally {
@@ -267,7 +268,8 @@ ipcMain.handle('blender:convert', (_e, files, gender) => convert(gender ? withSk
 // läser in benen rätt och viktningen bevaras när plagget sparas igen.
 function skeletonFor(gender) {
   const model = PED_MODELS[gender]
-  const p = model && path.join(PEDS, 'gta_files', model, `${model}.yft`)
+  const custom = !model && gender && path.join(CUSTOM_PEDS, safeId(gender), `${safeId(gender)}.yft`)
+  const p = model ? path.join(PEDS, 'gta_files', model, `${model}.yft`) : custom
   return p && fs.existsSync(p) ? { name: `${model}.yft`, data: fs.readFileSync(p) } : null
 }
 const withSkeleton = (files, gender) => {
@@ -279,6 +281,81 @@ const withSkeleton = (files, gender) => {
 
 ipcMain.handle('app:closeNow', () => {
   if (win && !win.isDestroyed()) win.destroy()
+})
+
+// ---- Egna peds: valfri ped (GTA-ped eller addon-ped) som grund i 3D och för egna texturer ----
+const CUSTOM_PEDS = path.join(PEDS, 'custom')
+fs.mkdirSync(CUSTOM_PEDS, { recursive: true })
+const PED_EXT = /\.(yft|ydd|ydr|ytd|ymt)$/i
+
+// Grundutseendet: första varianten (000) av varje del + skelettet, och deras första texturer.
+// Två sorters peds: "en fil per plagg" (uppr_000_u.ydd …, som freemode) eller "allt i en fil"
+// (s_m_y_cop_01.ydd med alla delar och s_m_y_cop_01.ytd med alla texturer). Props (_p) tas inte med.
+function defaultLook(files) {
+  const isProp = (f) => /_p\.(ydd|ytd)$/i.test(f.name)
+  const yft = files.filter((f) => /\.yft$/i.test(f.name))
+  const parts = files.filter((f) => /_000(_[a-z])?\.yd[dr]$/i.test(f.name))
+  if (parts.length) {
+    const tex = files.filter((f) => /_diff_000_a(_[a-z]+)?\.ytd$/i.test(f.name))
+    return [...yft, ...parts, ...tex]
+  }
+  const models = files.filter((f) => /\.yd[dr]$/i.test(f.name) && !isProp(f))
+  const tex = files.filter((f) => /\.ytd$/i.test(f.name) && !isProp(f))
+  return [...yft, ...models, ...tex]
+}
+
+ipcMain.handle('peds:listCustom', () => {
+  const out = []
+  for (const d of fs.readdirSync(CUSTOM_PEDS)) {
+    try {
+      out.push(JSON.parse(fs.readFileSync(path.join(CUSTOM_PEDS, d, 'meta.json'), 'utf8')))
+    } catch {
+      // Ofullständig mapp hoppas över.
+    }
+  }
+  return out
+})
+
+// Välj en mapp med pedens filer (från OpenIV/CodeWalker eller en addon-ped-resurs).
+ipcMain.handle('peds:addCustom', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Välj mappen med pedens filer (.yft, .ydd, .ytd)', properties: ['openDirectory'] })
+  if (r.canceled || !r.filePaths[0]) return null
+  const walk = (d) => fs.readdirSync(d).flatMap((f) => (fs.statSync(path.join(d, f)).isDirectory() ? walk(path.join(d, f)) : [path.join(d, f)]))
+  const all = walk(r.filePaths[0]).filter((p) => PED_EXT.test(p))
+  if (!all.length) throw new Error('Mappen innehåller inga GTA-filer (.yft, .ydd, .ytd).')
+  const yft = all.find((p) => /\.yft$/i.test(p))
+  // Pedens namn: .yft-filen, annars prefixet i filnamnen (s_m_y_cop_01^uppr_000_u.ydd), annars mappens namn.
+  const prefixed = all.map((p) => path.basename(p).match(/^([a-z0-9_]+)\^/i)).find(Boolean)
+  const model = safeId((yft ? path.basename(yft, path.extname(yft)) : prefixed ? prefixed[1] : path.basename(r.filePaths[0])).toLowerCase())
+  if (PED_MODELS[model] || Object.values(PED_MODELS).includes(model)) throw new Error('Freemode-gubbarna finns redan – välj en annan ped.')
+  const dir = path.join(CUSTOM_PEDS, model)
+  fs.rmSync(dir, { recursive: true, force: true })
+  fs.mkdirSync(path.join(dir, 'files'), { recursive: true })
+  const files = all.map((p) => {
+    const name = path.basename(p).replace(/^[a-z0-9_]+\^/i, '')
+    const data = fs.readFileSync(p)
+    fs.writeFileSync(path.join(dir, 'files', name), data)
+    return { name, data }
+  })
+  if (yft) fs.copyFileSync(yft, path.join(dir, `${model}.yft`))
+  await savePed(model, defaultLook(files))
+  const meta = { model, label: model, files: files.length, added: Date.now() }
+  fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta))
+  return meta
+})
+
+// Pedens alla filer – för att importera dess kläder som plagg.
+ipcMain.handle('peds:customFiles', (_e, model) => {
+  const dir = path.join(CUSTOM_PEDS, safeId(model), 'files')
+  return fs.readdirSync(dir).map((name) => ({ name, data: fs.readFileSync(path.join(dir, name)) }))
+})
+
+ipcMain.handle('peds:removeCustom', (_e, model) => {
+  const m = safeId(model)
+  fs.rmSync(path.join(CUSTOM_PEDS, m), { recursive: true, force: true })
+  fs.rmSync(path.join(PEDS, `${m}.glb`), { force: true })
+  fs.rmSync(path.join(PEDS, `${m}_ytd`), { recursive: true, force: true })
+  return true
 })
 
 // ---- Projekthistorik: varje projekt sparas i userData/projects/<id>/ (project.alexproj + meta.json) ----
@@ -418,6 +495,19 @@ ipcMain.handle('blender:convertMany', async (_e, jobs) => {
     for (const d of dirs) fs.rmSync(d, { recursive: true, force: true })
   }
   return { converted: pending.length }
+})
+
+// Byter ut vissa texturer i en befintlig .ytd och behåller resten exakt (peds med alla texturer i en fil).
+ipcMain.handle('blender:ytdPatch', async (_e, { original, name, replacements }) => {
+  const { dir, paths } = writeTemp([original, ...replacements])
+  try {
+    const out = path.join(dir, 'out')
+    fs.mkdirSync(out)
+    const target = await runBridge(['ytd_patch', paths[0], out, name, ...paths.slice(1)])
+    return fs.readFileSync(target)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 // Slår ihop flera texturer till en i modellen (UV flyttas till rutor i en atlas).

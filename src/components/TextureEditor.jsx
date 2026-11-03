@@ -599,8 +599,27 @@ export default function TextureEditor() {
     if (mode === 'rotate') fit()
   }
 
+  // Gör det markerade området till ett eget lager (t.ex. en logga som redan finns i texturen),
+  // så att det kan flyttas eller läggas på andra texturer. cut = fyll tyget under (Ta bort logga).
+  const selectionToLayer = (cut) => {
+    if (!selection) return
+    pushHistory()
+    ensureBase(tex)
+    const r = { x: Math.round(selection.x), y: Math.round(selection.y), w: Math.max(1, Math.round(selection.w)), h: Math.max(1, Math.round(selection.h)) }
+    const piece = document.createElement('canvas')
+    piece.width = r.w
+    piece.height = r.h
+    piece.getContext('2d').drawImage(tex.base, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h)
+    if (cut) healRect(tex.base.getContext('2d'), r)
+    const L = newImageLayer(piece, { x: r.x + r.w / 2, y: r.y + r.h / 2, scale: 1, name: tr('Logga') })
+    setLayers(tex.id, [...(tex.layers || []), L], L.id)
+    setSelection(null)
+    setTool('layer')
+  }
+
   const clearSelection = (mode) => {
     if (!selection) return
+    if (mode === 'layer' || mode === 'cut') return selectionToLayer(mode === 'cut')
     pushHistory()
     const ctx = target().getContext('2d')
     if (mode === 'erase') ctx.clearRect(selection.x, selection.y, selection.w, selection.h)
@@ -859,6 +878,12 @@ function OptionsBar(p) {
               </Button>
               <Button size="sm" onClick={() => p.clearSelection('erase')}>
                 {t('Gör genomskinlig')}
+              </Button>
+              <Button size="sm" variant="primary" onClick={() => p.clearSelection('layer')} title={t('Kopierar området till ett lager som kan flyttas och läggas på andra texturer')}>
+                {t('Gör till lager')}
+              </Button>
+              <Button size="sm" onClick={() => p.clearSelection('cut')} title={t('Flyttar området till ett lager och fyller tyget under')}>
+                {t('Klipp ut till lager')}
               </Button>
             </>
           )}

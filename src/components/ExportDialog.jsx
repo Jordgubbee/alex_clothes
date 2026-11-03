@@ -124,6 +124,23 @@ export default function ExportDialog({ onClose }) {
             </div>
           )}
 
+          {plan.patches?.length > 0 && (
+            <div>
+              <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-400">{t('Egna peds')}</div>
+              <div className="space-y-1">
+                {plan.patches.map((p) => {
+                  const changed = p.items.reduce((n, i) => n + i.textures.filter((x) => x.edited || !x.pending).length, 0)
+                  return (
+                    <div key={p.path} className="flex items-center justify-between rounded-md border border-ink-800 bg-ink-950 px-3 py-2 text-xs">
+                      <span className="font-mono text-ink-200">{p.path}</span>
+                      <span className="text-ink-400">{changed ? t('{n} ändrade texturer', { n: changed }) : t('oförändrad')}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {plan.mode === 'addon' ? (
             <div>
               <div className="mb-2 flex items-center justify-between">

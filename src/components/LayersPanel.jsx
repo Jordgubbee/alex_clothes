@@ -5,6 +5,7 @@ import { useStore } from '../lib/store'
 import { useT } from '../lib/i18n'
 import { Button, FilePick, Icon, Slider } from './ui'
 import { ColorInput } from './TextureEditor'
+import LayerCopyDialog from './LayerCopyDialog'
 
 // Typsnitt som användaren laddat in under sessionen.
 const customFonts = []
@@ -15,6 +16,7 @@ export default function LayersPanel({ tex, layers, selected, onSelect, onChange,
   const [, setFontsVersion] = useState(0)
   const fonts = useMemo(() => availableFonts(customFonts), [customFonts.length]) // eslint-disable-line react-hooks/exhaustive-deps
   const live = useRef(null)
+  const [copyOpen, setCopyOpen] = useState(false)
 
   // Första ändringen i en följd av slider-drag sparas i historiken, resten är "live".
   const begin = () => {
@@ -215,6 +217,9 @@ export default function LayersPanel({ tex, layers, selected, onSelect, onChange,
             </div>
 
             <div className="grid grid-cols-2 gap-1 border-t border-ink-800 pt-3">
+              <Button size="sm" variant="primary" className="col-span-2" onClick={() => setCopyOpen(true)}>
+                {t('Lägg på andra texturer…')}
+              </Button>
               <Button size="sm" onClick={() => move(1)} disabled={index >= layers.length - 1}>
                 <Icon name="up" /> {t('Upp')}
               </Button>
@@ -241,6 +246,7 @@ export default function LayersPanel({ tex, layers, selected, onSelect, onChange,
           </div>
         )}
       </div>
+      {copyOpen && selected && <LayerCopyDialog sourceTex={tex} layer={selected} onClose={() => setCopyOpen(false)} />}
     </aside>
   )
 }

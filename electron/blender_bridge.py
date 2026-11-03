@@ -414,6 +414,40 @@ def cmd_materials(ydd):
     ok(json.dumps(names))
 
 
+def cmd_ytd_patch(original, out_dir, name, replacements):
+    """Byter ut vissa texturer i en befintlig .ytd (t.ex. en peds alla texturer i en fil) och behåller
+    resten som de är. replacements: .dds-filer som heter som texturen de ersätter."""
+    clear_scene()
+    txds = bpy.context.scene.sz_txds
+    while len(txds.texture_dictionaries):
+        txds.texture_dictionaries.remove(0)
+    res = bpy.ops.sollumz.import_ytd(directory=os.path.dirname(original) + os.sep, files=[{"name": os.path.basename(original)}])
+    if "FINISHED" not in res or not len(txds.texture_dictionaries):
+        raise RuntimeError(f"Sollumz kunde inte läsa {os.path.basename(original)}")
+    txd = txds.texture_dictionaries[len(txds.texture_dictionaries) - 1]
+    txd.name = name
+    slots = {}
+    for slot in txd.textures:
+        if slot.image:
+            slots[tex_key(slot.image.name)] = slot
+    replaced = 0
+    for path in replacements:
+        key = tex_key(os.path.basename(path))
+        img = bpy.data.images.load(path)
+        img.name = key
+        if key in slots:
+            slots[key].image = img
+        else:
+            txd.new_texture(img)
+        replaced += 1
+    res = bpy.ops.sollumz.export_ytd(directory=out_dir + os.sep, direct_export=True, **NATIVE)
+    target = os.path.join(out_dir, name + ".ytd")
+    if "FINISHED" not in res or not os.path.exists(target):
+        raise RuntimeError("Sollumz kunde inte spara den nya .ytd:n")
+    print("ALEX_INFO " + str({"kept": len(slots), "replaced": replaced}), flush=True)
+    ok(target)
+
+
 def cmd_edit(ydd, out_dir):
     enable_sollumz()
     clear_scene()
@@ -465,6 +499,9 @@ def main():
         elif mode == "ytd":
             enable_sollumz()
             cmd_ytd(ARGS[1], ARGS[2], ARGS[3:])
+        elif mode == "ytd_patch":
+            enable_sollumz()
+            cmd_ytd_patch(ARGS[1], ARGS[2], ARGS[3], ARGS[4:])
         elif mode == "batch":
             enable_sollumz()
             cmd_batch(ARGS[1])

@@ -228,6 +228,15 @@ function createWindow() {
     shell.openExternal(url)
     return { action: 'deny' }
   })
+  // Vid stängning får fönstret spara osparade ändringar först (högst 15 s).
+  let closing = false
+  win.on('close', (e) => {
+    if (closing) return
+    e.preventDefault()
+    closing = true
+    win.webContents.send('app:closing')
+    setTimeout(() => win && !win.isDestroyed() && win.destroy(), 15000)
+  })
   if (isDev) win.loadURL('http://localhost:5178')
   else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
 }
@@ -267,6 +276,103 @@ const withSkeleton = (files, gender) => {
   const skel = skeletonFor(gender)
   return skel && !files.some((f) => /\.yft$/i.test(f.name)) ? [...files, skel] : files
 }
+
+ipcMain.handle('app:closeNow', () => {
+  if (win && !win.isDestroyed()) win.destroy()
+})
+
+// ---- Projekthistorik: varje projekt sparas i userData/projects/<id>/ (project.alexproj + meta.json) ----
+const PROJECTS = path.join(DATA, 'projects')
+fs.mkdirSync(PROJECTS, { recursive: true })
+const safeId = (id) => String(id).replace(/[^A-Za-z0-9_-]/g, '')
+
+ipcMain.handle('projects:list', () => {
+  const out = []
+  for (const id of fs.readdirSync(PROJECTS)) {
+    try {
+      out.push(JSON.parse(fs.readFileSync(path.join(PROJECTS, id, 'meta.json'), 'utf8')))
+    } catch {
+      // En halvsparad mapp hoppas över.
+    }
+  }
+  return out.sort((a, b) => b.updated - a.updated)
+})
+
+ipcMain.handle('projects:save', (_e, { meta, data }) => {
+  const dir = path.join(PROJECTS, safeId(meta.id))
+  fs.mkdirSync(dir, { recursive: true })
+  // Skriv till en temporär fil först så att ett avbrott aldrig förstör det sparade projektet.
+  const tmp = path.join(dir, 'project.alexproj.tmp')
+  fs.writeFileSync(tmp, Buffer.from(data))
+  fs.renameSync(tmp, path.join(dir, 'project.alexproj'))
+  fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({ ...meta, updated: Date.now() }))
+  return true
+})
+
+ipcMain.handle('projects:load', (_e, id) => fs.readFileSync(path.join(PROJECTS, safeId(id), 'project.alexproj')))
+
+ipcMain.handle('projects:delete', (_e, id) => {
+  fs.rmSync(path.join(PROJECTS, safeId(id)), { recursive: true, force: true })
+  return true
+})
+
+ipcMain.handle('projects:rename', (_e, { id, name }) => {
+  const f = path.join(PROJECTS, safeId(id), 'meta.json')
+  const meta = JSON.parse(fs.readFileSync(f, 'utf8'))
+  fs.writeFileSync(f, JSON.stringify({ ...meta, name }))
+  return true
+})
+
+// ---- Export: appen skriver filerna själv (ingen webbläsar-nedladdning som kan försvinna) ----
+ipcMain.handle('export:saveZip', async (_e, { name, data }) => {
+  const s = readSettings()
+  const r = await dialog.showSaveDialog(win, {
+    title: 'Spara FiveM-resursen',
+    defaultPath: path.join(s.lastExportDir || app.getPath('desktop'), name),
+    filters: [{ name: 'Zip', extensions: ['zip'] }],
+  })
+  if (r.canceled || !r.filePath) return null
+  fs.writeFileSync(r.filePath, Buffer.from(data))
+  writeSettings({ ...readSettings(), lastExportDir: path.dirname(r.filePath) })
+  shell.showItemInFolder(r.filePath)
+  return r.filePath
+})
+
+// Skriver resursen direkt i en mapp, t.ex. serverns resources/. Finns mappen redan frågar vi först.
+ipcMain.handle('export:folder', async (_e, { name, files }) => {
+  const s = readSettings()
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Välj mappen resursen ska ligga i (t.ex. din servers resources)',
+    defaultPath: s.lastExportFolder || app.getPath('desktop'),
+    properties: ['openDirectory', 'createDirectory'],
+  })
+  if (r.canceled || !r.filePaths[0]) return null
+  const dest = path.join(r.filePaths[0], name)
+  if (fs.existsSync(dest)) {
+    const answer = await dialog.showMessageBox(win, {
+      type: 'question',
+      buttons: ['Ersätt', 'Avbryt'],
+      defaultId: 0,
+      cancelId: 1,
+      message: `Mappen "${name}" finns redan.`,
+      detail: 'Vill du ersätta den med den nya exporten?',
+    })
+    if (answer.response !== 0) return null
+    fs.rmSync(dest, { recursive: true, force: true })
+  }
+  // Sökvägarna i exporten börjar med resursens namn – den delen blir själva mappen.
+  for (const f of files) {
+    const rel = f.path.split('/').slice(1).join(path.sep)
+    if (!rel) continue
+    const out = path.join(dest, rel)
+    if (!out.startsWith(dest)) continue
+    fs.mkdirSync(path.dirname(out), { recursive: true })
+    fs.writeFileSync(out, Buffer.from(f.data))
+  }
+  writeSettings({ ...readSettings(), lastExportFolder: r.filePaths[0] })
+  shell.openPath(dest)
+  return dest
+})
 
 // Konverterar många plagg i en Blender-start. Varje färdigt plagg skickas direkt till fönstret
 // ('convert:done'), så att 3D-vyn fylls på medan resten fortfarande byggs.

@@ -74,12 +74,12 @@ export function addonNames({ gender, dlc, category, index, textureIndex = 0, ski
   }
 }
 
+// Namn för filer och paket: bokstäver (stora och små), siffror och understreck. å/ä/ö blir a/a/o.
 export const slugify = (s) =>
   String(s)
-    .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/[^A-Za-z0-9_]+/g, '_')
     .replace(/^_+|_+$/g, '')
     .replace(/_+/g, '_')
 

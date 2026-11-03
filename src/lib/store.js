@@ -12,6 +12,31 @@ export const packDlc = (pack, gender) => slugify(pack.overrides?.[gender] || '')
 
 export const useStore = create((set, get) => ({
   projectName: 'mina_klader',
+  // Historik: projectId = mappen i appens projektlista. screen: 'home' (startsidan) eller 'editor'.
+  projectId: null,
+  screen: 'home',
+  dirty: false,
+  lastSaved: null,
+  setScreen: (screen) => set({ screen }),
+  markSaved: (projectId) => set({ projectId, dirty: false, lastSaved: Date.now() }),
+  // Nytt tomt projekt.
+  resetProject: (name = 'nytt_projekt') =>
+    set({
+      projectId: null,
+      projectName: name,
+      items: [],
+      packs: [DEFAULT_PACK],
+      exportMode: 'addon',
+      selectedItemId: null,
+      selectedTextureId: null,
+      selectedLayerId: null,
+      multi: [],
+      packFilter: 'all',
+      outfit: {},
+      dirty: false,
+      lastSaved: null,
+      screen: 'editor',
+    }),
   gender: 'male',
   items: [],
   basePed: { male: null, female: null },
@@ -69,7 +94,7 @@ export const useStore = create((set, get) => ({
     }),
   clearMulti: () => set({ multi: [] }),
 
-  setProjectName: (projectName) => set({ projectName: projectName.replace(/[^a-z0-9_]/gi, '_').toLowerCase() }),
+  setProjectName: (projectName) => set({ projectName: projectName.replace(/[^A-Za-z0-9_-]/g, '_') }),
   setGender: (gender) => set({ gender }),
   setView: (view) => set({ view }),
   setActiveCategory: (activeCategory) => set({ activeCategory }),
@@ -213,7 +238,8 @@ export const useStore = create((set, get) => ({
     const packs = p.packs?.length ? p.packs : [DEFAULT_PACK]
     for (const pk of packs) nextId = Math.max(nextId, (parseInt(pk.id.slice(2), 10) || 0) + 1)
     const items = p.items.map((i) => ({ ...i, packId: packs.some((pk) => pk.id === i.packId) ? i.packId : packs[0].id }))
-    set({ ...p, packs, items, exportMode: p.exportMode || 'addon', multi: [], packFilter: 'all', selectedItemId: p.items[0]?.id || null, selectedTextureId: p.items[0]?.textures[0]?.id || null, activeCategory: p.items[0]?.category || 'jbib' })
+    // Inget plagg väljs – det laddas först när man klickar på det.
+    set({ ...p, packs, items, exportMode: p.exportMode || 'addon', multi: [], packFilter: 'all', outfit: {}, selectedItemId: null, selectedTextureId: null, selectedLayerId: null, activeCategory: p.items[0]?.category || 'jbib', dirty: false, screen: 'editor' })
   },
 }))
 

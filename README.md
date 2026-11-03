@@ -10,7 +10,7 @@ Språk: Swedish, Norwegian, Danish, Finnish, English.
 
 ## Ladda ner
 
-**[⬇ alex_clothes-Setup (installation)](https://github.com/Jordgubbee/alex_clothes/releases/latest)** – välj `alex_clothes-Setup-x.x.x.exe` (eller `.zip`) under *Assets*.
+**[⬇ alex_clothes-Setup (installation)](https://github.com/Jordgubbee/alex_clothes/releases/latest)** – välj `alex_clothes-x.x.x-win64.exe` (eller `.zip`) under *Assets*.
 
 Blockerar webbläsaren filen? Ladda ner **.zip**-versionen i stället och packa upp den, eller:
 - **Edge:** klicka på ··· vid nedladdningen › *Behåll* › *Visa mer* › *Behåll ändå*.
@@ -21,7 +21,7 @@ Varningarna kommer för att appen inte är signerad med ett köpt certifikat, in
 
 ## Installera
 
-1. Ladda ner `alex_clothes-Setup-x.x.x.exe` under **Releases** och installera. Du får en genväg på skrivbordet och i startmenyn.
+1. Ladda ner `alex_clothes-x.x.x-win64.exe` under **Releases** och installera. Du får en genväg på skrivbordet och i startmenyn.
 2. Installera [Blender](https://www.blender.org/download/) 4.2 eller nyare och [Sollumz](https://github.com/Sollumz/Sollumz/releases) (Edit › Preferences › Add-ons › Install from Disk).
 3. Starta alex_clothes. Blender och GTA V hittas automatiskt. [CodeWalker.Core](https://github.com/dexyfex/CodeWalker) (MIT) följer med appen.
 

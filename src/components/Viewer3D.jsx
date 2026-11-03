@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { useStore } from '../lib/store'
 import { extOf } from '../lib/images'
 import { on, emit, uvCache } from '../lib/bus'
@@ -78,9 +79,15 @@ export default function Viewer3D() {
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio))
     renderer.outputColorSpace = THREE.SRGBColorSpace
+    // Filmisk tonkurva och omgivningsljus – utan dem ser tyg ut som blank plast.
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.toneMappingExposure = 1.05
     mount.appendChild(renderer.domElement)
     const scene = new THREE.Scene()
     scene.background = new THREE.Color(0x161616)
+    const pmrem = new THREE.PMREMGenerator(renderer)
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+    scene.environmentIntensity = 0.4
     const camera = new THREE.PerspectiveCamera(32, 1, 0.01, 100)
     camera.position.set(0, 1.1, 3.4)
     const controls = new OrbitControls(camera, renderer.domElement)
@@ -139,7 +146,7 @@ export default function Viewer3D() {
 
   useEffect(() => {
     const { hemi, key, rim } = ctx.current.lights
-    const presets = { studio: [1.6, 2.2, 1], dag: [2.4, 3, 0.6], natt: [0.5, 0.9, 1.6] }
+    const presets = { studio: [0.7, 1.9, 0.9], dag: [1.1, 2.6, 0.5], natt: [0.25, 0.7, 1.4] }
     ;[hemi.intensity, key.intensity, rim.intensity] = presets[light]
     ctx.current.scene.background.set(light === 'dag' ? 0x2a2d30 : 0x161616)
   }, [light])
@@ -170,7 +177,7 @@ export default function Viewer3D() {
             map.colorSpace = THREE.SRGBColorSpace
             map.flipY = canvas ? !fromGta : map.flipY
           }
-          m.material = new THREE.MeshStandardMaterial({ map, color: map ? 0xffffff : 0xb08a72, roughness: 0.75, side: THREE.DoubleSide, alphaTest: 0.35 })
+          m.material = new THREE.MeshPhysicalMaterial({ map, normalMap: m.material?.normalMap || null, color: map ? 0xffffff : 0xb08a72, roughness: 0.7, sheen: 0.25, sheenRoughness: 0.6, side: THREE.DoubleSide, alphaTest: 0.35 })
         })
         if (fromGta) {
           // Fötterna på golvet, oavsett exakt rot-höjd.
@@ -355,11 +362,15 @@ function applyTexture(c, entry, item, selectedTexId, wire) {
       // Kom ihåg modellens egen textur – plagg med flera texturer visar rätt textur på varje del.
       m.userData.key = texKey(m.material?.name)
       m.userData.origMap = m.material?.map || null
+      // Plaggets normal-karta (veck, sömmar, väv) från GTA följer med.
+      const normalMap = m.material?.normalMap || null
+      const normalScale = m.material?.normalScale?.clone() || new THREE.Vector2(1, 1)
       const decal = /__decal/.test(m.material?.name || '')
       // Dekaler (märken, tryck) ligger exakt på tyget – rita dem ovanpå och halvgenomskinliga, som GTA.
       m.material = decal
-        ? new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 })
-        : new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide, alphaTest: 0.35 })
+        ? new THREE.MeshStandardMaterial({ roughness: 0.8, side: THREE.DoubleSide, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 })
+        : // Tyg: matt yta med lite "sheen" (mjuk glans i kanterna) i stället för plastig blankhet.
+          new THREE.MeshPhysicalMaterial({ roughness: 0.9, metalness: 0, sheen: 0.35, sheenRoughness: 0.85, sheenColor: new THREE.Color(0x3a3a3a), normalMap, normalScale, side: THREE.DoubleSide, alphaTest: 0.35 })
       if (decal) m.renderOrder = 2
       m.userData.ownMat = true
     }

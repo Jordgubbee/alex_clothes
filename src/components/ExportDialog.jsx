@@ -17,16 +17,49 @@ export default function ExportDialog({ onClose }) {
   const notify = useStore((s) => s.notify)
   const setPacksOpen = useStore((s) => s.setPacksOpen)
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState(0)
+  // Exportval sparas mellan gångerna.
+  const [opts, setOpts] = useState(() => {
+    try {
+      return { layout: 'packs', lowercase: false, target: 'folder', ...JSON.parse(localStorage.getItem('alex.exportOpts') || '{}') }
+    } catch {
+      return { layout: 'packs', lowercase: false, target: 'folder' }
+    }
+  })
+  const setOpt = (patch) => {
+    const next = { ...opts, ...patch }
+    setOpts(next)
+    try {
+      localStorage.setItem('alex.exportOpts', JSON.stringify(next))
+    } catch {
+      // Inte viktigt.
+    }
+  }
   const [showFiles, setShowFiles] = useState(null)
 
-  const plan = useMemo(() => planExport({ items, packs, exportMode }), [items, packs, exportMode, t])
+  const plan = useMemo(() => planExport({ items, packs, exportMode, layout: opts.layout, lowercase: opts.lowercase }), [items, packs, exportMode, opts.layout, opts.lowercase, t])
   const errors = plan.problems.filter((p) => p.level === 'error')
   const warns = plan.problems.filter((p) => p.level === 'warn')
 
   const run = async () => {
     setBusy(t('Förbereder…'))
+    setProgress(0)
     try {
-      const { packed, built, errors: errs } = await exportResource({ projectName, items, packs, exportMode, onProgress: setBusy })
+      const res = await exportResource({
+        projectName,
+        items,
+        packs,
+        exportMode,
+        ...opts,
+        target: desktop ? opts.target : 'zip',
+        onProgress: (text, frac) => {
+          setBusy(text)
+          if (frac != null) setProgress(frac)
+        },
+      })
+      if (res.cancelled) return
+      const { packed, built, errors: errs, savedTo } = res
+      if (savedTo) notify(t('Sparat: {p}', { p: savedTo }))
       if (errs.length) notify(t('Sollumz kunde inte packa {n} textur(er): {e}', { n: errs.length, e: errs[0] }), 'error')
       else if (packed) notify(t('Export klar. {n} texturer måste packas i OpenIV – se README.txt.', { n: packed }))
       else notify(t('Export klar ({n} texturer packade). Lägg mappen i resources/ och skriv ensure {r} i server.cfg.', { n: built, r: projectName }))
@@ -56,9 +89,30 @@ export default function ExportDialog({ onClose }) {
             </ModeCard>
           </div>
 
-          <Field label={t('Resursens namn')} hint={t('Mappen du lägger i resources/. Små bokstäver, siffror och understreck.')}>
+          <Field label={t('Resursens namn')} hint={t('Mappen du lägger i resources/. Bokstäver, siffror, understreck och bindestreck.')}>
             <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} />
           </Field>
+
+          <div className="grid grid-cols-3 gap-3">
+            <Field label={t('Spara som')}>
+              <select value={desktop ? opts.target : 'zip'} disabled={!desktop} onChange={(e) => setOpt({ target: e.target.value })} className="h-8 w-full rounded-md border border-ink-700 bg-ink-900 px-2 text-[13px] text-ink-100">
+                <option value="folder">{t('Mapp (direkt i resources)')}</option>
+                <option value="zip">{t('.zip-fil')}</option>
+              </select>
+            </Field>
+            <Field label={t('Mappstruktur')}>
+              <select value={opts.layout} onChange={(e) => setOpt({ layout: e.target.value })} disabled={exportMode !== 'addon'} className="h-8 w-full rounded-md border border-ink-700 bg-ink-900 px-2 text-[13px] text-ink-100">
+                <option value="packs">{t('Per paket och kön')}</option>
+                <option value="flat">{t('Allt i stream/')}</option>
+              </select>
+            </Field>
+            <Field label={t('Bokstäver')}>
+              <select value={opts.lowercase ? 'lower' : 'keep'} onChange={(e) => setOpt({ lowercase: e.target.value === 'lower' })} className="h-8 w-full rounded-md border border-ink-700 bg-ink-900 px-2 text-[13px] text-ink-100">
+                <option value="keep">{t('Behåll stora och små')}</option>
+                <option value="lower">{t('Allt med små bokstäver')}</option>
+              </select>
+            </Field>
+          </div>
 
           {(errors.length > 0 || warns.length > 0) && (
             <div className="space-y-1">
@@ -143,6 +197,17 @@ export default function ExportDialog({ onClose }) {
           {!desktop && exportMode === 'addon' && <p className="text-xs text-accent">{t('Addon-paket kräver skrivbordsappen (för .ymt).')}</p>}
         </div>
 
+        {busy && (
+          <div className="border-t border-ink-800 px-5 pt-3">
+            <div className="mb-1 flex justify-between text-[11px] text-ink-300">
+              <span>{busy}</span>
+              <span className="tabular-nums">{Math.round(progress * 100)}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-ink-800">
+              <div className="h-full bg-accent transition-[width] duration-300" style={{ width: `${Math.max(2, progress * 100)}%` }} />
+            </div>
+          </div>
+        )}
         <div className="flex items-center justify-between gap-2 border-t border-ink-800 px-5 py-3">
           <span className="text-xs text-ink-500">{errors.length ? t('{n} fel måste rättas', { n: errors.length }) : warns.length ? t('{n} varningar', { n: warns.length }) : t('Allt ser bra ut')}</span>
           <div className="flex gap-2">
@@ -150,7 +215,7 @@ export default function ExportDialog({ onClose }) {
               {t('Avbryt')}
             </Button>
             <Button variant="primary" onClick={run} disabled={!!busy || errors.length > 0 || !items.length || (!desktop && exportMode === 'addon')}>
-              {busy || t('Exportera .zip')}
+              {busy ? t('Exporterar…') : desktop && opts.target === 'folder' ? t('Exportera till mapp…') : t('Spara .zip…')}
             </Button>
           </div>
         </div>

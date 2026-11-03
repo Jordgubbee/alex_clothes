@@ -2,7 +2,7 @@
   "name": "alex-clothes",
   "productName": "alex_clothes",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"vite --port 5178 --strictPort --open false\" \"wait-on tcp:5178 && electron .\"",
@@ -10,7 +10,7 @@
     "build": "node scripts/check-i18n.mjs && vite build",
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder --win --publish never && node scripts/check-release.mjs",
-    "release": "npm run build && electron-builder --win --publish never && node scripts/check-release.mjs && electron-builder --win --publish always -c.publish.provider=github --prepackaged release/win-unpacked"
+    "release": "npm run dist"
   },
   "dependencies": {
     "jszip": "3.10.1",
@@ -68,7 +68,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "alex_clothes-Setup-${version}.${ext}",
+      "artifactName": "alex_clothes-${version}-win64.exe",
       "perMachine": false,
       "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,

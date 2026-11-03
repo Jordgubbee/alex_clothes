@@ -14,6 +14,19 @@ contextBridge.exposeInMainWorld('alex', {
     ipcRenderer.on('convert:done', h)
     return () => ipcRenderer.removeListener('convert:done', h)
   },
+  onClosing: (fn) => {
+    const h = () => fn()
+    ipcRenderer.on('app:closing', h)
+    return () => ipcRenderer.removeListener('app:closing', h)
+  },
+  closeNow: () => ipcRenderer.invoke('app:closeNow'),
+  listProjects: () => ipcRenderer.invoke('projects:list'),
+  saveProjectData: (meta, data) => ipcRenderer.invoke('projects:save', { meta, data }),
+  loadProjectData: (id) => ipcRenderer.invoke('projects:load', id),
+  deleteProject: (id) => ipcRenderer.invoke('projects:delete', id),
+  renameProject: (id, name) => ipcRenderer.invoke('projects:rename', { id, name }),
+  saveZip: (name, data) => ipcRenderer.invoke('export:saveZip', { name, data }),
+  exportFolder: (name, files) => ipcRenderer.invoke('export:folder', { name, files }),
   buildYmt: (jobs) => ipcRenderer.invoke('ymt:build', jobs),
   mergeTextures: (args) => ipcRenderer.invoke('blender:merge', args),
   editInBlender: (itemId, files, gender) => ipcRenderer.invoke('blender:edit', { itemId, files, gender }),

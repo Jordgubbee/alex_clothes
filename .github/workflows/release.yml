@@ -1,9 +1,11 @@
-# Bygger Windows-installationen och lägger upp den under Releases när du pushar en tagg, t.ex. v1.0.0.
+# Bygger appen på GitHubs Windows-servrar och publicerar en release när du pushar en tagg, t.ex. v1.0.4.
+# (Lokalt kan Windows Smart App Control stoppa bygget av en osignerad installationsfil.)
 name: Release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -18,6 +20,27 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run release
+      # Bygger installationsfil + portabel version och stoppar om någon fil är trasig.
+      - run: npm run dist
+      - name: Zip-versioner (webbläsare blockerar sällan zip)
+        shell: pwsh
+        run: |
+          Get-ChildItem release -Filter 'alex_clothes-*.exe' | ForEach-Object {
+            Compress-Archive -Force -Path $_.FullName -DestinationPath ($_.FullName -replace '\.exe$', '.zip')
+          }
+      - name: Publicera release
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $files = Get-ChildItem release -File | Where-Object { $_.Name -match '^alex_clothes-.*\.(exe|zip)$' } | ForEach-Object { $_.FullName }
+          $notes = if (Test-Path RELEASE_NOTES.md) { 'RELEASE_NOTES.md' } else { $null }
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @files --clobber
+          } elseif ($notes) {
+            gh release create $tag @files --title "alex_clothes $($tag.TrimStart('v'))" --notes-file $notes --latest
+          } else {
+            gh release create $tag @files --title "alex_clothes $($tag.TrimStart('v'))" --generate-notes --latest
+          }

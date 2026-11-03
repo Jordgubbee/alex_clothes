@@ -120,6 +120,43 @@ def hide_helpers():
         if st.startswith("sollumz_bound") or level in LOW_LODS or "_med" in name or "_low" in name or "_vlow" in name:
             bpy.data.objects.remove(obj)
     mark_decals()
+    bake_preview_materials()
+
+
+def bake_preview_materials():
+    """Sollumz-material använder egna nodgrupper som glTF-exporten inte förstår, så bara färgen följde med
+    och tyget såg ut som plast. Här byggs ett vanligt PBR-material med plaggets egen normal-karta
+    (veck, sömmar, väv), så att 3D-vyn kan visa tygets struktur. Materialnamnet behålls."""
+    for mat in bpy.data.materials:
+        if not mat.use_nodes or not mat.node_tree:
+            continue
+        nodes = mat.node_tree.nodes
+        diff = diffuse_node(mat)
+        bump = sampler(mat, "BumpSampler")
+        diff_img = diff.image if diff and diff.image and diff.image.size[0] > 0 else None
+        bump_img = bump.image if bump and bump.image and bump.image.size[0] > 0 else None
+        if not diff_img and not bump_img:
+            continue
+        out = next((n for n in nodes if n.type == "OUTPUT_MATERIAL"), None) or nodes.new("ShaderNodeOutputMaterial")
+        bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+        bsdf.inputs["Roughness"].default_value = 0.85
+        bsdf.inputs["Metallic"].default_value = 0.0
+        links = mat.node_tree.links
+        if diff_img:
+            tex = nodes.new("ShaderNodeTexImage")
+            tex.image = diff_img
+            links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+            links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
+        if bump_img:
+            bump_img.colorspace_settings.name = "Non-Color"
+            ntex = nodes.new("ShaderNodeTexImage")
+            ntex.image = bump_img
+            nmap = nodes.new("ShaderNodeNormalMap")
+            links.new(ntex.outputs["Color"], nmap.inputs["Color"])
+            links.new(nmap.outputs["Normal"], bsdf.inputs["Normal"])
+        for l in list(out.inputs["Surface"].links):
+            links.remove(l)
+        links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
 
 
 def mark_decals():

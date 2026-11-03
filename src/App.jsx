@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
 import { desktop, loadSavedPeds, previewFromYdd } from './lib/desktop'
 import { useStore } from './lib/store'
-import { saveProject, openProject } from './lib/exporter'
-import { loadImageToCanvas } from './lib/images'
 import { LANGUAGES, useT, t as tr } from './lib/i18n'
 import { openItem } from './lib/loader'
 import Sidebar from './components/Sidebar'
@@ -12,7 +10,9 @@ import Viewer3D from './components/Viewer3D'
 import ExportDialog from './components/ExportDialog'
 import SettingsDialog from './components/SettingsDialog'
 import PackDialog from './components/PackDialog'
-import { Button, FilePick, Segmented } from './components/ui'
+import Home from './components/Home'
+import { goHome, saveToHistory, startAutosave } from './lib/projects'
+import { Button, Icon, Segmented } from './components/ui'
 
 export default function App() {
   const t = useT()
@@ -24,7 +24,9 @@ export default function App() {
   const setProjectName = useStore((s) => s.setProjectName)
   const toast = useStore((s) => s.toast)
   const notify = useStore((s) => s.notify)
-  const loadProject = useStore((s) => s.loadProject)
+  const screen = useStore((s) => s.screen)
+  const dirty = useStore((s) => s.dirty)
+  const lastSaved = useStore((s) => s.lastSaved)
   const settingsOpen = useStore((s) => s.settingsOpen)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const packsOpen = useStore((s) => s.packsOpen)
@@ -40,6 +42,24 @@ export default function App() {
   useEffect(() => {
     if (selectedItemId) openItem(selectedItemId)
   }, [selectedItemId])
+
+  // Historik: autospara, och utan skrivbordsappen finns ingen startsida.
+  useEffect(() => {
+    if (!desktop) useStore.getState().setScreen('editor')
+    return startAutosave()
+  }, [])
+
+  // Ctrl+S sparar projektet.
+  useEffect(() => {
+    const key = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        if (useStore.getState().screen === 'editor') saveToHistory()
+      }
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [])
 
   useEffect(() => {
     document.documentElement.lang = lang === 'no' ? 'nb' : lang
@@ -65,31 +85,28 @@ export default function App() {
         <span className="text-[13px] font-semibold tracking-tight">
           alex<span className="text-accent">_</span>clothes
         </span>
+        {screen === 'editor' && desktop && (
+          <Button variant="ghost" size="sm" onClick={goHome} title={t('Startsidan med alla dina projekt')}>
+            ← {t('Hem')}
+          </Button>
+        )}
+        {screen === 'editor' && (<>
         <input
           value={projectName}
           onChange={(e) => setProjectName(e.target.value)}
           className="h-7 w-40 rounded border border-transparent bg-transparent px-2 text-xs text-ink-300 outline-none hover:border-ink-700 focus:border-ink-600"
           title={t('Projektnamn')}
         />
+        {desktop && (
+          <span className="text-[11px] text-ink-500">{dirty ? t('Osparade ändringar') : lastSaved ? t('Sparat {tid}', { tid: new Date(lastSaved).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }) : ''}</span>
+        )}
+        </>)}
         <div className="flex-1" />
+        {screen === 'editor' && (<>
         <Segmented value={gender} onChange={setGender} options={[{ value: 'male', label: t('Kille') }, { value: 'female', label: t('Tjej') }]} />
         <Segmented value={view} onChange={setView} options={[{ value: '2d', label: '2D' }, { value: 'split', label: '2D + 3D' }, { value: '3d', label: '3D' }]} />
         <div className="flex-1" />
-        <FilePick
-          variant="ghost"
-          accept=".alexproj"
-          onFiles={async ([f]) => {
-            try {
-              loadProject(await openProject(f, loadImageToCanvas))
-              notify(t('Projektet öppnades.'))
-            } catch (e) {
-              notify(t('Kunde inte öppna projektet: {e}', { e: e.message }), 'error')
-            }
-          }}
-        >
-          {t('Öppna')}
-        </FilePick>
-        <Button variant="ghost" onClick={() => saveProject(useStore.getState()).then(() => notify(t('Projektet sparades.')))}>
+        <Button variant="ghost" onClick={() => saveToHistory()} title="Ctrl+S">
           {t('Spara')}
         </Button>
         {exportMode === 'addon' && (
@@ -97,6 +114,7 @@ export default function App() {
             {t('Paket')}
           </Button>
         )}
+        </>)}
         {desktop && (
           <Button variant="ghost" onClick={() => setSettingsOpen(true)}>
             {t('Inställningar')}
@@ -114,11 +132,16 @@ export default function App() {
             </option>
           ))}
         </select>
-        <Button variant="primary" onClick={() => setExporting(true)}>
-          {t('Exportera till FiveM')}
-        </Button>
+        {screen === 'editor' && (
+          <Button variant="primary" onClick={() => setExporting(true)}>
+            {t('Exportera till FiveM')}
+          </Button>
+        )}
       </header>
 
+      {screen === 'home' ? (
+        <Home />
+      ) : (
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         <main className="flex min-w-0 flex-1">
@@ -135,6 +158,7 @@ export default function App() {
         </main>
         <Inspector />
       </div>
+      )}
 
       {exporting && <ExportDialog onClose={() => setExporting(false)} />}
       {settingsOpen && <SettingsDialog />}

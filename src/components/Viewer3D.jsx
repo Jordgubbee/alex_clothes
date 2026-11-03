@@ -121,6 +121,8 @@ export default function Viewer3D() {
       renderer.render(scene, camera)
     }
     ctx.current = { scene, camera, controls, renderer, turn, gtaRoot, plainRoot, ped: null, models: new Map(), textures: new Map(), spin: false, lights: { hemi, key, rim } }
+    // Bara i utvecklingsläge: låter automatiska tester se vad 3D-scenen innehåller.
+    if (import.meta.env.DEV) window.__alexViewer = ctx.current
     loop()
     return () => {
       cancelAnimationFrame(raf)

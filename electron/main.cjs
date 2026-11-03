@@ -171,8 +171,17 @@ function runBridgeNow(args, { background = true, onLine } = {}) {
   })
 }
 
+// Cachen gäller bara för samma version av bryggan – annars ligger 3D-modeller från en äldre, felaktig version kvar.
+const BRIDGE_VERSION = (() => {
+  try {
+    return crypto.createHash('sha1').update(fs.readFileSync(BRIDGE)).digest('hex').slice(0, 12)
+  } catch {
+    return 'dev'
+  }
+})()
 const hash = (buffers) => {
   const h = crypto.createHash('sha1')
+  h.update(BRIDGE_VERSION)
   for (const b of buffers) h.update(Buffer.from(b))
   return h.digest('hex')
 }

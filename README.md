@@ -8,6 +8,17 @@ Ett Windows-program för FiveM-kläder. Med det kan du:
 
 Språk: Swedish, Norwegian, Danish, Finnish, English.
 
+## Ladda ner
+
+**[⬇ alex_clothes-Setup (installation)](https://github.com/Jordgubbee/alex_clothes/releases/latest)** – välj  under *Assets*.
+
+Blockerar webbläsaren filen? Ladda ner **.zip**-versionen i stället och packa upp den, eller:
+- **Edge:** klicka på ··· vid nedladdningen › *Behåll* › *Visa mer* › *Behåll ändå*.
+- **Chrome:** öppna nedladdningar (Ctrl+J) › *Behåll farlig fil*.
+- **Windows SmartScreen:** *Mer information* › *Kör ändå*.
+
+Varningarna kommer för att appen inte är signerad med ett köpt certifikat, inte för att något är fel.
+
 ## Installera
 
 1. Ladda ner `alex_clothes-Setup-x.x.x.exe` under **Releases** och installera. Du får en genväg på skrivbordet och i startmenyn.

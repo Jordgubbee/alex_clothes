@@ -4,7 +4,8 @@ import { fileToCanvases, baseName, canvasFrom } from './images'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { t } from './i18n'
 import { ensureTextures } from './loader'
-import { registerPed, unregisterPed } from './categories'
+import { registerPed, unregisterPed, guessFromFilename, categoryByKey } from './categories'
+import { isCompoundPed, pedDrawableCounts } from './pedExport'
 import { importFiles, importCompoundYtd } from './importer'
 
 export const desktop = typeof window !== 'undefined' ? window.alex || null : null
@@ -102,6 +103,49 @@ export async function importCustomPedClothes(model) {
     return
   }
   await importFiles(all.filter((f) => /\.(ydd|ytd)$/i.test(f.name)), null, { gender: model })
+}
+
+// Nya kläder till en egen ped (t.ex. addon-kläder från ett annat paket): varje plagg får nästa lediga
+// nummer efter pedens egna, så att inget original ersätts. Exporten lägger in dem i pedens .ymt.
+export async function importAddonForPed(model, files) {
+  const st = useStore.getState()
+  const names = (await desktop.customPedFiles(model)).map((f) => f.name)
+  if (isCompoundPed(model, names)) {
+    st.notify(t('{p} har alla plagg i en enda fil, så nya plagg kan inte läggas till. Du kan göra nya texturer till pedens egna plagg.', { p: model }), 'error')
+    return
+  }
+  const next = pedDrawableCounts(names)
+  for (const i of st.items) if (i.gender === model) next[i.category] = Math.max(next[i.category] || 0, i.slot + 1)
+  // Samma plagg (kategori + nummer + paket) i källfilerna hålls ihop och får ett gemensamt nytt nummer.
+  const groups = new Map()
+  let props = 0
+  for (const f of files) {
+    const g = guessFromFilename(f.name)
+    if (!g || !/\.(ydd|ytd)$/i.test(f.name)) continue
+    if (categoryByKey(g.category)?.prop) {
+      props++
+      continue
+    }
+    const key = `${g.dlc || ''}:${g.gender || ''}:${g.category}:${g.slot}`
+    if (!groups.has(key)) groups.set(key, { ...g, files: [] })
+    groups.get(key).files.push(f)
+  }
+  const renamed = []
+  for (const g of [...groups.values()].sort((a, b) => a.category.localeCompare(b.category) || a.slot - b.slot)) {
+    const slot = next[g.category] || 0
+    next[g.category] = slot + 1
+    const n = String(slot).padStart(3, '0')
+    for (const f of g.files) {
+      const letter = f.name.toLowerCase().match(/_diff_\d{3}_([a-z])/)?.[1] || 'a'
+      const name = /\.ydd$/i.test(f.name) ? `${model}^${g.category}_${n}_${g.skin ? 'r' : 'u'}.ydd` : `${model}^${g.category}_diff_${n}_${letter}_${g.texSuffix || (g.skin ? 'whi' : 'uni')}.ytd`
+      renamed.push(new File([f], name))
+    }
+  }
+  if (props) st.notify(t('{n} props hoppades över – nya props kan inte läggas till på egna peds än.', { n: props }), 'error')
+  if (!renamed.length) return st.notify(t('Hittade inga plagg (.ydd/.ytd med t.ex. jbib_000 i namnet).'), 'error')
+  st.setGender(model)
+  await importFiles(renamed, null, { gender: model })
+  st.notify(t('{n} nya plagg till {p}. De får nya nummer efter pedens egna och läggs in i pedens .ymt vid export.', { n: groups.size, p: model }))
 }
 
 export async function removeCustomPed(model) {

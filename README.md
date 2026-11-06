@@ -55,6 +55,12 @@ Varningarna kommer för att appen inte är signerad med ett köpt certifikat, in
      - `.meta` (ShopPedApparel)
      - `fxmanifest.lua` med `data_file 'SHOP_PED_APPAREL_META_FILE'`
    - **Ersätt GTA-plagg** byter ut freemode-plagg med samma nummer.
+   - **Egna peds** exporteras som en hel ped i `stream/<ped>/`:
+     - pedens alla filer (`.yft`, `.ydd`, `.ytd`, `.ymt`, props) med dina ändringar,
+     - en uppdaterad `.ymt` om du lagt till plagg eller färgvarianter,
+     - `peds.meta` och `data_file 'PED_METADATA_FILE'` om det är en addon-ped (pedens egen `peds.meta` används om den fanns i mappen).
+     - Ta bort pedens gamla resurs från servern, annars krockar filerna.
+   - **Addon-kläder till en egen ped:** välj peden och använd **Addon-kläder till …** längst ner i plagglistan. Plaggen får nästa lediga nummer efter pedens egna. Det fungerar för peds med en fil per plagg; peds med allt i en fil (t.ex. `s_m_y_cop_01`) kan bara få nya texturer.
 
 Packa upp zip:en i `resources/` och lägg till `ensure <namn>` i `server.cfg`. Kläderna syns i illenium-appearance, qb-clothing, esx_skin, fivem-appearance med flera.
 

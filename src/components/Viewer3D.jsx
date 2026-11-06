@@ -15,6 +15,7 @@ import { Button, FilePick } from './ui'
 import { useT } from '../lib/i18n'
 import PedPanel, { partLabel } from './PedPanel'
 import { fitOf, fitMatrix, captureGeometry, applyInflate, pivots } from '../lib/fit'
+import { ensureTextures } from '../lib/loader'
 
 // GTA:s freemode-gubbe har sin rot vid höften, ungefär en meter över fötterna.
 const GTA_ROOT_HEIGHT = 1.0
@@ -295,10 +296,18 @@ export default function Viewer3D() {
       if (sel && sel.category === comp && slot === sel.slot) {
         const tex = sel.textures.find((x) => x.id === selectedTextureId) || sel.textures[0]
         if (tex?.canvas) map = liveMap(c, tex.id, tex.canvas, tex.version)
-      } else if (choice?.letter && slot === choice.slot) {
-        const prefix = `${comp}_diff_${String(slot).padStart(3, '0')}_${choice.letter}`
-        const key = [...pedTex.keys()].find((k) => k === prefix || k.startsWith(`${prefix}_`))
-        if (key) map = liveMap(c, `ped:${gender}:${key}`, pedTex.get(key), 0)
+      } else {
+        // Samma del i projektet (t.ex. huvud 1, färg b): visa din redigerade textur, annars pedens egen.
+        const letter = choice && slot === choice.slot && choice.letter ? choice.letter : 'a'
+        const own = items.find((i) => i.gender === gender && i.category === comp && i.slot === slot)
+        const tex = own?.textures[letter.charCodeAt(0) - 97]
+        if (tex?.canvas) map = liveMap(c, tex.id, tex.canvas, tex.version)
+        else if (tex?.pending) ensureTextures(own).then(() => setPedReady((n) => n + 1))
+        else if (letter !== 'a') {
+          const prefix = `${comp}_diff_${String(slot).padStart(3, '0')}_${letter}`
+          const key = [...pedTex.keys()].find((k) => k === prefix || k.startsWith(`${prefix}_`))
+          if (key) map = liveMap(c, `ped:${gender}:${key}`, pedTex.get(key), 0)
+        }
       }
       if (m.material.map !== map) {
         m.material.map = map

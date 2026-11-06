@@ -130,9 +130,9 @@ export const useStore = create((set, get) => ({
       const forPed = { ...s.pedLook[gender] }
       if (choice) forPed[comp] = choice
       else delete forPed[comp]
-      return { pedLook: saveLook({ ...s.pedLook, [gender]: forPed }) }
+      return { pedLook: saveLook({ ...s.pedLook, [gender]: forPed }), dirty: true }
     }),
-  resetPedLook: (gender) => set((s) => ({ pedLook: saveLook({ ...s.pedLook, [gender]: {} }) })),
+  resetPedLook: (gender) => set((s) => ({ pedLook: saveLook({ ...s.pedLook, [gender]: {} }), dirty: true })),
   settingsOpen: false,
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   blender: null, // { ok, mode, blender, error }
@@ -269,7 +269,9 @@ export const useStore = create((set, get) => ({
     for (const pk of packs) nextId = Math.max(nextId, (parseInt(pk.id.slice(2), 10) || 0) + 1)
     const items = p.items.map((i) => ({ ...i, packId: packs.some((pk) => pk.id === i.packId) ? i.packId : packs[0].id }))
     // Inget plagg väljs – det laddas först när man klickar på det.
-    set({ ...p, packs, items, exportMode: p.exportMode || 'addon', multi: [], packFilter: 'all', outfit: {}, selectedItemId: null, selectedTextureId: null, selectedLayerId: null, activeCategory: p.items[0]?.category || 'jbib', dirty: false, screen: 'editor' })
+    // Pedens utseende i 3D följer med projektet (per ped), övriga peds behåller sitt.
+    const pedLook = p.pedLook ? saveLook({ ...get().pedLook, ...p.pedLook }) : get().pedLook
+    set({ ...p, pedLook, packs, items, exportMode: p.exportMode || 'addon', multi: [], packFilter: 'all', outfit: {}, selectedItemId: null, selectedTextureId: null, selectedLayerId: null, activeCategory: p.items[0]?.category || 'jbib', dirty: false, screen: 'editor' })
   },
 }))
 

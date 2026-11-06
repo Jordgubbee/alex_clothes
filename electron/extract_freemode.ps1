@@ -60,6 +60,29 @@ try {
     foreach ($ped in $peds) {
       $index[$ped] = @($entries | Where-Object { $_.entry.Path.ToLower() -like "*streamedpeds_mp.rpf\$ped\*" } | ForEach-Object { $_.entry.Name.ToLower() })
     }
+    # Alla peds som finns i spelet (för att skilja GTA-peds från addon-peds). De ligger i flera arkiv:
+    # x64*.rpf i spelmappen och DLC-paketen i update\x64\dlcpacks.
+    $pedNames = New-Object System.Collections.Generic.HashSet[string]
+    $archives = @(Get-ChildItem -Path $Gta -Filter 'x64*.rpf' -File) + @(Get-ChildItem -Path (Join-Path $Gta 'update\x64\dlcpacks') -Filter 'dlc.rpf' -File -Recurse -ErrorAction SilentlyContinue)
+    foreach ($a in $archives) {
+      try {
+        $top = [Activator]::CreateInstance($rpfType, [object[]]@([string]$a.FullName, [string]$a.Name))
+        $top.ScanStructure($noop, $noop)
+        $st = New-Object System.Collections.Stack
+        $st.Push($top)
+        while ($st.Count -gt 0) {
+          $r = $st.Pop()
+          foreach ($e in $r.AllEntries) {
+            $n = $e.Name.ToLower()
+            if ($n.EndsWith('.yft') -and $e.Path.ToLower() -like '*ped*') { [void]$pedNames.Add($n.Substring(0, $n.Length - 4)) }
+          }
+          if ($r.Children) { foreach ($c in $r.Children) { $st.Push($c) } }
+        }
+      } catch {
+        # Ett arkiv som inte går att läsa hoppas över.
+      }
+    }
+    $index['__peds'] = @($pedNames | Sort-Object)
     Write-Output ("ALEX_OK " + ($index | ConvertTo-Json -Compress -Depth 3))
     exit 0
   }

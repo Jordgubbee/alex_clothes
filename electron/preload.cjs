@@ -37,6 +37,8 @@ contextBridge.exposeInMainWorld('alex', {
   fitModel: (args) => ipcRenderer.invoke('blender:fit', args),
   gtaPedIndex: (gender) => ipcRenderer.invoke('ped:gtaIndex', gender),
   gtaPedPart: (args) => ipcRenderer.invoke('ped:gtaPart', args),
+  pedExportInfo: (model) => ipcRenderer.invoke('peds:exportInfo', model),
+  ymtToXml: (data) => ipcRenderer.invoke('ymt:toXml', data),
   editInBlender: (itemId, files, gender) => ipcRenderer.invoke('blender:edit', { itemId, files, gender }),
   onEdited: (fn) => {
     const h = (_e, d) => fn(d)

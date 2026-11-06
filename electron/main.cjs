@@ -321,7 +321,8 @@ ipcMain.handle('peds:addCustom', async () => {
   const r = await dialog.showOpenDialog(win, { title: 'Välj mappen med pedens filer (.yft, .ydd, .ytd)', properties: ['openDirectory'] })
   if (r.canceled || !r.filePaths[0]) return null
   const walk = (d) => fs.readdirSync(d).flatMap((f) => (fs.statSync(path.join(d, f)).isDirectory() ? walk(path.join(d, f)) : [path.join(d, f)]))
-  const all = walk(r.filePaths[0]).filter((p) => PED_EXT.test(p))
+  const found = walk(r.filePaths[0])
+  const all = found.filter((p) => PED_EXT.test(p))
   if (!all.length) throw new Error('Mappen innehåller inga GTA-filer (.yft, .ydd, .ytd).')
   const yft = all.find((p) => /\.yft$/i.test(p))
   // Pedens namn: .yft-filen, annars prefixet i filnamnen (s_m_y_cop_01^uppr_000_u.ydd), annars mappens namn.
@@ -338,10 +339,35 @@ ipcMain.handle('peds:addCustom', async () => {
     return { name, data }
   })
   if (yft) fs.copyFileSync(yft, path.join(dir, `${model}.yft`))
+  // En addon-peds peds.meta följer med till exporten.
+  const pedsMeta = found.filter((p) => /\.meta$/i.test(p)).map((p) => fs.readFileSync(p, 'utf8')).find((x) => /CPedModelInfo/.test(x) && x.toLowerCase().includes(`<name>${model}</name>`))
+  if (pedsMeta) fs.writeFileSync(path.join(dir, 'peds.meta'), pedsMeta)
   await savePed(model, defaultLook(files))
-  const meta = { model, label: model, files: files.length, added: Date.now() }
+  const meta = { model, label: model, files: files.length, added: Date.now(), addon: await isAddonPed(model, !!pedsMeta) }
   fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta))
   return meta
+})
+
+// En ped som inte finns i GTA (addon-ped) behöver peds.meta i exporten. Utan GTA: gissa på peds.meta.
+async function isAddonPed(model, hasMeta) {
+  try {
+    return !(await gtaIndex()).__peds.includes(model)
+  } catch {
+    return hasMeta
+  }
+}
+
+// Det exporten behöver veta om en egen ped: addon eller GTA-ped, och dess peds.meta om den fanns.
+ipcMain.handle('peds:exportInfo', async (_e, model) => {
+  const dir = path.join(CUSTOM_PEDS, safeId(model))
+  const metaPath = path.join(dir, 'meta.json')
+  const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'))
+  const pedsMeta = fs.existsSync(path.join(dir, 'peds.meta')) ? fs.readFileSync(path.join(dir, 'peds.meta'), 'utf8') : null
+  if (meta.addon === undefined) {
+    meta.addon = await isAddonPed(meta.model, !!pedsMeta)
+    fs.writeFileSync(metaPath, JSON.stringify(meta))
+  }
+  return { addon: meta.addon, pedsMeta }
 })
 
 // Pedens alla filer – för att importera dess kläder som plagg.
@@ -550,6 +576,19 @@ ipcMain.handle('blender:materials', async (_e, { gender, ydd }) => {
 })
 
 // Bygger .ymt (CPedVariationInfo) från XML med CodeWalker och läser tillbaka varje fil som kontroll.
+// Läser en befintlig .ymt (t.ex. en egen peds) som CodeWalker-XML.
+ipcMain.handle('ymt:toXml', async (_e, data) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-ymt-'))
+  try {
+    fs.writeFileSync(path.join(dir, 'in.ymt'), Buffer.from(data))
+    fs.writeFileSync(path.join(dir, 'jobs.txt'), `toxml|${path.join(dir, 'in.ymt')}|${path.join(dir, 'out.xml')}`)
+    await runPs(BUILD_YMT, ['-CodeWalker', codewalkerPath(), '-Jobs', path.join(dir, 'jobs.txt')])
+    return fs.readFileSync(path.join(dir, 'out.xml'), 'utf8')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 ipcMain.handle('ymt:build', async (_e, jobs) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-ymt-'))
   try {
@@ -632,7 +671,10 @@ ipcMain.handle('ped:fromGta', async () => {
 // Listan över freemode-filer sparas en gång; varje vald del plockas ut och byggs först när den väljs.
 const GTA_INDEX = path.join(PEDS, 'gta_index.json')
 async function gtaIndex() {
-  if (fs.existsSync(GTA_INDEX)) return JSON.parse(fs.readFileSync(GTA_INDEX, 'utf8'))
+  if (fs.existsSync(GTA_INDEX)) {
+    const cached = JSON.parse(fs.readFileSync(GTA_INDEX, 'utf8'))
+    if (cached.__peds) return cached
+  }
   const gta = toolPath('gtaPath', detectGta)
   if (!gta) throw new Error('Hittar inte GTA V. Välj spelmappen under Inställningar.')
   const index = JSON.parse(await runPs(EXTRACT, ['-CodeWalker', codewalkerPath(), '-Gta', gta, '-List']))

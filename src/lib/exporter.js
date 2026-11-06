@@ -7,6 +7,7 @@ import { buildYmtXml, buildShopMeta } from './ymt'
 import { packDlc } from './store'
 import { t } from './i18n'
 import { ensureAllTextures, ensureTextures } from './loader'
+import { bundlePed, pedsMetaFile } from './pedExport'
 
 export function download(blob, filename) {
   const a = document.createElement('a')
@@ -64,6 +65,13 @@ export function planExport({ items, packs, exportMode, layout = 'packs', lowerca
   }
 
   const patches = compoundPatches(items, L)
+  // Egna peds exporteras som en hel ped: alla pedens filer följer med, med dina ändringar.
+  const pedBundles = [...new Set(items.filter((i) => isCustomPed(i.gender)).map((i) => i.gender))].map((gender) => ({
+    gender,
+    model: PEDS[gender].model,
+    dir: L(`stream/${PEDS[gender].model}`),
+    items: items.filter((i) => i.gender === gender && !i.compound),
+  }))
   items = items.filter((i) => !i.compound)
 
   if (exportMode === 'replace') {
@@ -79,7 +87,7 @@ export function planExport({ items, packs, exportMode, layout = 'packs', lowerca
         textures: item.textures.map((_, i) => L(`stream/${streamNames({ ...base, textureIndex: i }).texture}`)),
       })
     }
-    return { mode: 'replace', entries, groups, patches, problems }
+    return { mode: 'replace', entries, groups, patches, pedBundles, problems }
   }
 
   // Egna peds: deras kläder ersätter pedens egna med samma nummer och filnamn (ingen .ymt behövs).
@@ -134,10 +142,13 @@ export function planExport({ items, packs, exportMode, layout = 'packs', lowerca
       groups.push(group)
     }
   }
-  return { mode: 'addon', entries, groups, patches, problems }
+  return { mode: 'addon', entries, groups, patches, pedBundles, problems }
 }
 
-const MANIFEST = (name, metas) => `fx_version 'cerulean'
+const MANIFEST = (name, metas, pedsMeta) => {
+  const files = [...metas, ...(pedsMeta ? ['peds.meta'] : [])]
+  const data = [...metas.map((m) => `data_file 'SHOP_PED_APPAREL_META_FILE' '${m}'`), ...(pedsMeta ? [`data_file 'PED_METADATA_FILE' 'peds.meta'`] : [])]
+  return `fx_version 'cerulean'
 game 'gta5'
 lua54 'yes'
 
@@ -145,18 +156,19 @@ author 'alex_clothes'
 description '${name}'
 version '1.0.0'
 ${
-  metas.length
+  files.length
     ? `
 files {
-${metas.map((m) => `  '${m}',`).join('\n')}
+${files.map((m) => `  '${m}',`).join('\n')}
 }
 
-${metas.map((m) => `data_file 'SHOP_PED_APPAREL_META_FILE' '${m}'`).join('\n')}
+${data.join('\n')}
 `
     : `
--- Filerna i stream/ ersätter GTA:s egna freemode-plagg.
+-- Filerna i stream/ ersätter GTA:s egna filer med samma namn.
 `
 }`
+}
 
 const README = (plan, name, packList) => `ALEX_CLOTHES
 ============
@@ -173,6 +185,14 @@ ${plan.groups.map((g) => `  ${g.ped}_${g.dlc}  (${g.count} ${t('plagg')})`).join
     : t('Filerna i stream/ ersätter freemode-plaggen med samma nummer.')
 }
 ${
+  plan.pedBundles?.length
+    ? `
+${t('Peds (hela peden med dina ändringar):')}
+${plan.pedBundles.map((b) => `  ${b.dir}/`).join('\n')}
+`
+    : ''
+}
+${
   packList.length
     ? `
 ${t('Följande texturer kunde inte packas automatiskt och ligger i _packa_texturer. Packa dem till .ytd i OpenIV med exakt samma namn:')}
@@ -183,7 +203,8 @@ ${packList.map((p) => `  ${p.dds}  ->  ${p.ytd}`).join('\n')}
 }`
 
 /**
- * target: 'zip' = spara en .zip, 'folder' = skriv resursen direkt i en mapp (t.ex. serverns resources/).
+ * target: 'zip' = spara en .zip, 'folder' = skriv resursen direkt i en mapp (t.ex. serverns resources/),
+ * 'data' = returnera zip-datan (för tester).
  * onProgress(text, andel 0–1).
  */
 export async function exportResource({ projectName, items, packs, exportMode, layout = 'packs', lowercase = false, target = 'zip', onProgress }) {
@@ -197,7 +218,15 @@ export async function exportResource({ projectName, items, packs, exportMode, la
     await ensureTextures(i)
   }
   const zip = new JSZip()
-  const root = zip.folder(projectName)
+  const folder = zip.folder(projectName)
+  // Allt som skrivs noteras, så att en peds originalfiler aldrig skriver över dina ändringar.
+  const written = new Set()
+  const root = {
+    file: (p, data) => {
+      written.add(p.toLowerCase())
+      return folder.file(p, data)
+    },
+  }
   const pack = []
   const errors = []
   let built = 0
@@ -266,7 +295,16 @@ export async function exportResource({ projectName, items, packs, exportMode, la
     } else throw new Error(t('Addon-paket kräver skrivbordsappen (för .ymt).'))
   }
 
-  root.file('fxmanifest.lua', MANIFEST(projectName, plan.groups.map((g) => g.meta)))
+  // Hela peden: originalfilerna som inte ändrats, uppdaterad .ymt och peds.meta för addon-peds.
+  const pedMetas = []
+  for (const bundle of plan.pedBundles || []) {
+    onProgress?.(t('Lägger till {p}…', { p: bundle.model }), 0.84)
+    const meta = await bundlePed({ root, dir: bundle.dir, gender: bundle.gender, items: bundle.items, written, lowercase, onProgress: (text) => onProgress?.(text, 0.84) })
+    if (meta) pedMetas.push(meta)
+  }
+  if (pedMetas.length) root.file('peds.meta', pedsMetaFile(pedMetas))
+
+  root.file('fxmanifest.lua', MANIFEST(projectName, plan.groups.map((g) => g.meta), pedMetas.length > 0))
   root.file('README.txt', README(plan, projectName, pack))
   let savedTo = null
   if (target === 'folder' && desktop) {
@@ -275,6 +313,9 @@ export async function exportResource({ projectName, items, packs, exportMode, la
     for (const [p, f] of Object.entries(zip.files)) if (!f.dir) files.push({ path: p, data: await f.async('uint8array') })
     savedTo = await desktop.exportFolder(projectName, files)
     if (!savedTo) return { cancelled: true }
+  } else if (target === 'data') {
+    // Bara för tester: zip-datan tillbaka utan spara-dialog.
+    return { data: await zip.generateAsync({ type: 'uint8array' }), plan }
   } else {
     onProgress?.(t('Sparar zip…'), 0.85)
     const data = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 3 } }, (m) => onProgress?.(t('Sparar zip…'), 0.85 + 0.15 * (m.percent / 100)))
@@ -291,7 +332,7 @@ export async function exportResource({ projectName, items, packs, exportMode, la
 // (.ytd) i stället för att avkodas, och bara ändrade texturer sparas som bilder.
 export async function buildProjectData(state) {
   const zip = new JSZip()
-  const meta = { version: 3, projectName: state.projectName, gender: state.gender, packs: state.packs, exportMode: state.exportMode, items: [] }
+  const meta = { version: 3, projectName: state.projectName, gender: state.gender, packs: state.packs, exportMode: state.exportMode, pedLook: state.pedLook, items: [] }
   const sources = new Map() // File -> sökväg i zip:en (en .ytd med flera texturer sparas bara en gång)
   const addSource = async (file) => {
     if (sources.has(file)) return sources.get(file)
@@ -386,5 +427,5 @@ export async function openProject(file, loadCanvas) {
       textures,
     })
   }
-  return { projectName: meta.projectName, gender: meta.gender, packs: meta.packs, exportMode: meta.exportMode, items }
+  return { projectName: meta.projectName, gender: meta.gender, packs: meta.packs, exportMode: meta.exportMode, pedLook: meta.pedLook, items }
 }

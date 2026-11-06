@@ -124,9 +124,24 @@ export default function ExportDialog({ onClose }) {
             </div>
           )}
 
-          {plan.patches?.length > 0 && (
+          {plan.pedBundles?.length > 0 && (
             <div>
               <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-400">{t('Egna peds')}</div>
+              <div className="space-y-1">
+                {plan.pedBundles.map((b) => (
+                  <div key={b.dir} className="flex items-center justify-between rounded-md border border-ink-800 bg-ink-950 px-3 py-2 text-xs">
+                    <span className="font-mono text-ink-200">{b.dir}/</span>
+                    <span className="text-ink-400">{t('hela peden: .yft, .ydd, .ytd, .ymt')}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-ink-500">{t('Hela peden följer med, med dina ändringar. Addon-peds får även peds.meta. Ta bort pedens gamla resurs från servern så att de inte krockar.')}</p>
+            </div>
+          )}
+
+          {plan.patches?.length > 0 && (
+            <div>
+              <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-400">{t('Ombyggda .ytd')}</div>
               <div className="space-y-1">
                 {plan.patches.map((p) => {
                   const changed = p.items.reduce((n, i) => n + i.textures.filter((x) => x.edited || !x.pending).length, 0)

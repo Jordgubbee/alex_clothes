@@ -23,6 +23,13 @@ Appen är inte signerad med ett köpt certifikat.
 - **Edge**: ··· vid nedladdningen › Behåll › Visa mer › Behåll ändå. **Chrome**: Ctrl+J › Behåll farlig fil.
 - **Smart App Control** (Windows 11) kan stoppa osignerade program helt. Använd då den portabla versionen eller stäng av Smart App Control under Windows-säkerhet › App- och webbläsarkontroll.
 
+### Nytt i 1.0.9
+- **Egna peds fungerar in game** – exporten lägger nu med hela peden (`.yft`, `.ydd`, `.ytd`, `.ymt`, props) med dina ändringar, i stället för bara de ändrade filerna. Det gör också att du kan öppna hela resultatet i OpenIV
+- **Addon-peds får `peds.meta`** och `PED_METADATA_FILE` i fxmanifest automatiskt (pedens egen `peds.meta` används om den fanns)
+- **Addon-kläder till en egen ped** – knappen **Addon-kläder till …** längst ner i plagglistan. Plaggen får nästa lediga nummer och läggs in i pedens `.ymt` vid export
+- **Ändringar sparas överallt** – byter du huvud, byxor m.m. i Ped-menyn syns dina redigerade texturer på den delen, och pedens valda utseende sparas i projektet
+- Tydligare filnamn i exporten för egna peds
+
 ### Nytt i 1.0.8
 - **Byt ansikte, frisyr och kläder på peden** – menyn **Ped** i 3D-vyn: välj nummer och färg för varje del (46 ansikten, frisyrer, tröjor, byxor, skor …). På freemode-gubbarna hämtas delarna ur ditt eget GTA första gången; på egna peds väljer du bland pedens egna varianter
 - Välj **Dold** för att ta bort en del, eller dubbelklicka på den. **Återställ peden** tar tillbaka grundutseendet

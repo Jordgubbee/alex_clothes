@@ -1,5 +1,6 @@
 import { useStore } from '../lib/store'
-import { ALL_CATEGORIES, GROUPS } from '../lib/categories'
+import { ALL_CATEGORIES, GROUPS, isCustomPed } from '../lib/categories'
+import { desktop, importAddonForPed } from '../lib/desktop'
 import { importFiles } from '../lib/importer'
 import { filesFromDrop } from '../lib/files'
 import { useT } from '../lib/i18n'
@@ -144,6 +145,19 @@ export default function Sidebar() {
           <Button variant="ghost" className="mt-1.5 w-full" onClick={() => addItem({ category: active })}>
             <Icon name="plus" /> {t('Tomt plagg')}
           </Button>
+          {desktop && isCustomPed(gender) && (
+            <div className="mt-2 border-t border-ink-800 pt-2">
+              <div className="mb-1.5 text-[11px] text-ink-400">{t('Addon-kläder till {p}', { p: gender })}</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <FilePick size="sm" multiple accept=".ydd,.ytd" onFiles={(f) => importAddonForPed(gender, f)}>
+                  {t('Filer…')}
+                </FilePick>
+                <FilePick size="sm" folder onFiles={(f) => importAddonForPed(gender, f)}>
+                  {t('Mapp…')}
+                </FilePick>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </aside>

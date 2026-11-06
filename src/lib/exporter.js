@@ -41,7 +41,7 @@ function compoundPatches(items, L) {
   return [...map.values()]
 }
 
-export function planExport({ items, packs, exportMode, layout = 'packs', lowercase = false }) {
+export function planExport({ items, packs, exportMode, layout = 'packs', lowercase = false, pedLook = {} }) {
   const L = (p) => (lowercase ? p.toLowerCase() : p)
   const problems = []
   const err = (text) => problems.push({ level: 'error', text })
@@ -66,12 +66,19 @@ export function planExport({ items, packs, exportMode, layout = 'packs', lowerca
 
   const patches = compoundPatches(items, L)
   // Egna peds exporteras som en hel ped: alla pedens filer följer med, med dina ändringar.
-  const pedBundles = [...new Set(items.filter((i) => isCustomPed(i.gender)).map((i) => i.gender))].map((gender) => ({
+  // Peden följer med när den har plagg i projektet eller när du valt dess utseende i Ped-menyn.
+  const lookPeds = Object.entries(pedLook).filter(([g, l]) => isCustomPed(g) && Object.keys(l || {}).length).map(([g]) => g)
+  const pedBundles = [...new Set([...items.filter((i) => isCustomPed(i.gender)).map((i) => i.gender), ...lookPeds])].map((gender) => ({
     gender,
     model: PEDS[gender].model,
     dir: L(`stream/${PEDS[gender].model}`),
-    items: items.filter((i) => i.gender === gender && !i.compound),
+    items: items.filter((i) => i.gender === gender),
+    look: pedLook[gender] || {},
   }))
+  for (const b of pedBundles) {
+    const hidden = Object.entries(b.look).filter(([, ch]) => ch?.slot < 0).map(([k]) => k)
+    if (hidden.length) warn(t('{p}: dolda delar ({d}) går inte att ta bort från peden in game – de syns ändå.', { p: b.model, d: hidden.join(', ') }))
+  }
   items = items.filter((i) => !i.compound)
 
   if (exportMode === 'replace') {
@@ -207,9 +214,9 @@ ${packList.map((p) => `  ${p.dds}  ->  ${p.ytd}`).join('\n')}
  * 'data' = returnera zip-datan (för tester).
  * onProgress(text, andel 0–1).
  */
-export async function exportResource({ projectName, items, packs, exportMode, layout = 'packs', lowercase = false, target = 'zip', onProgress }) {
+export async function exportResource({ projectName, items, packs, exportMode, layout = 'packs', lowercase = false, pedLook = {}, lockPeds = true, target = 'zip', onProgress }) {
   if (lowercase) projectName = projectName.toLowerCase()
-  const plan = planExport({ items, packs, exportMode, layout, lowercase })
+  const plan = planExport({ items, packs, exportMode, layout, lowercase, pedLook })
   if (plan.problems.some((p) => p.level === 'error')) throw new Error(t('Rätta felen först.'))
   // Bara texturer som inte kan kopieras rakt av behöver avkodas – resten går snabbt.
   const needPixels = items.filter((i) => i.textures.some((x) => !x.canvas && !(x.original && !x.edited)))
@@ -220,11 +227,15 @@ export async function exportResource({ projectName, items, packs, exportMode, la
   const zip = new JSZip()
   const folder = zip.folder(projectName)
   // Allt som skrivs noteras, så att en peds originalfiler aldrig skriver över dina ändringar.
-  const written = new Set()
+  const written = new Map()
   const root = {
     file: (p, data) => {
-      written.add(p.toLowerCase())
+      written.set(p.toLowerCase(), { path: p, data })
       return folder.file(p, data)
+    },
+    remove: (p) => {
+      written.delete(p.toLowerCase())
+      folder.remove(p)
     },
   }
   const pack = []
@@ -287,7 +298,14 @@ export async function exportResource({ projectName, items, packs, exportMode, la
       }
     }
     onProgress?.(t('Bygger {f}…', { f: patch.path.split('/').pop() }), 0.82)
-    const original = { name: patch.file.name, data: new Uint8Array(await patch.file.arrayBuffer()) }
+    // Äldre projekt sparade inte pedens .ytd – den hämtas då från den tillagda peden.
+    let source = patch.file instanceof Blob ? patch.file : null
+    if (!source && desktop) {
+      const f = (await desktop.customPedFiles(patch.ped)).find((x) => x.name.toLowerCase() === patch.path.split('/').pop().toLowerCase())
+      if (f) source = new File([f.data], f.name)
+    }
+    if (!source) throw new Error(t('Hittar inte {f}. Lägg till peden igen under Inställningar › Egna peds.', { f: patch.path.split('/').pop() }))
+    const original = { name: source.name, data: new Uint8Array(await source.arrayBuffer()) }
     if (!replacements.length) root.file(patch.path, original.data)
     else if (desktop) {
       root.file(patch.path, await desktop.patchYtd(original, patch.path.split('/').pop().replace(/\.ytd$/i, ''), replacements))
@@ -299,7 +317,7 @@ export async function exportResource({ projectName, items, packs, exportMode, la
   const pedMetas = []
   for (const bundle of plan.pedBundles || []) {
     onProgress?.(t('Lägger till {p}…', { p: bundle.model }), 0.84)
-    const meta = await bundlePed({ root, dir: bundle.dir, gender: bundle.gender, items: bundle.items, written, lowercase, onProgress: (text) => onProgress?.(text, 0.84) })
+    const { meta } = await bundlePed({ root, dir: bundle.dir, gender: bundle.gender, items: bundle.items, look: bundle.look, lock: lockPeds, written, lowercase, onProgress: (text) => onProgress?.(text, 0.84) })
     if (meta) pedMetas.push(meta)
   }
   if (pedMetas.length) root.file('peds.meta', pedsMetaFile(pedMetas))
@@ -342,8 +360,10 @@ export async function buildProjectData(state) {
     return p
   }
   for (const item of state.items) {
-    const { converting, previewYdd, textures, ydd, preview, ...rest } = item // eslint-disable-line no-unused-vars
+    const { converting, previewYdd, textures, ydd, preview, compound, ...rest } = item // eslint-disable-line no-unused-vars
     const m = { ...rest, ydd: ydd?.name || null, preview: preview?.name || null, textures: [] }
+    // Plagg ur en peds gemensamma .ytd: originalfilen sparas en gång, så att exporten kan bygga om den.
+    if (compound) m.compound = { prop: !!compound.prop, src: compound.file instanceof Blob ? await addSource(compound.file) : null }
     if (ydd) zip.file(`items/${item.id}/${ydd.name}`, await ydd.arrayBuffer())
     if (preview) zip.file(`items/${item.id}/preview/${preview.name}`, await preview.arrayBuffer())
     for (const tex of textures) {
@@ -424,6 +444,7 @@ export async function openProject(file, loadCanvas) {
       ...m,
       ydd: m.ydd ? await asFile(`items/${m.id}/${m.ydd}`, m.ydd) : null,
       preview: m.preview ? await asFile(`items/${m.id}/preview/${m.preview}`, m.preview) : null,
+      ...(m.compound ? { compound: { prop: !!m.compound.prop, file: m.compound.src ? await srcFile(m.compound.src) : null } } : {}),
       textures,
     })
   }

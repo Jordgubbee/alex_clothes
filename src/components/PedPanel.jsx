@@ -127,7 +127,9 @@ export default function PedPanel({ gender, baseParts, ped, replaced, onClose }) 
           ? t('Välj vilken variant och färg av pedens delar som visas. Dubbelklicka på en del för att dölja den.')
           : t('Ansikten, frisyrer och kläder hämtas ur ditt GTA första gången du väljer dem. Dubbelklicka på en del för att dölja den.')}
       </p>
-      <p className="px-1.5 pt-1 text-[11px] leading-relaxed text-ink-500">{t('Påverkar bara 3D-vyn – inte exporten.')}</p>
+      <p className="px-1.5 pt-1 text-[11px] leading-relaxed text-ink-500">
+        {custom ? t('Följer med i exporten: peden får det här utseendet in game och i OpenIV.') : t('Påverkar bara 3D-vyn. Freemode-ansiktet väljs i serverns klädmeny.')}
+      </p>
       {Object.keys(look).length > 0 && (
         <Button size="sm" variant="ghost" className="mt-1 w-full" onClick={() => resetPedLook(gender)}>
           {t('Återställ peden')}

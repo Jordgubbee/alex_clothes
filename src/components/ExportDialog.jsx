@@ -16,14 +16,15 @@ export default function ExportDialog({ onClose }) {
   const setProjectName = useStore((s) => s.setProjectName)
   const notify = useStore((s) => s.notify)
   const setPacksOpen = useStore((s) => s.setPacksOpen)
+  const pedLook = useStore((s) => s.pedLook)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState(0)
   // Exportval sparas mellan gångerna.
   const [opts, setOpts] = useState(() => {
     try {
-      return { layout: 'packs', lowercase: false, target: 'folder', ...JSON.parse(localStorage.getItem('alex.exportOpts') || '{}') }
+      return { layout: 'packs', lowercase: false, target: 'folder', lockPeds: true, ...JSON.parse(localStorage.getItem('alex.exportOpts') || '{}') }
     } catch {
-      return { layout: 'packs', lowercase: false, target: 'folder' }
+      return { layout: 'packs', lowercase: false, target: 'folder', lockPeds: true }
     }
   })
   const setOpt = (patch) => {
@@ -37,7 +38,7 @@ export default function ExportDialog({ onClose }) {
   }
   const [showFiles, setShowFiles] = useState(null)
 
-  const plan = useMemo(() => planExport({ items, packs, exportMode, layout: opts.layout, lowercase: opts.lowercase }), [items, packs, exportMode, opts.layout, opts.lowercase, t])
+  const plan = useMemo(() => planExport({ items, packs, exportMode, layout: opts.layout, lowercase: opts.lowercase, pedLook }), [items, packs, exportMode, opts.layout, opts.lowercase, pedLook, t])
   const errors = plan.problems.filter((p) => p.level === 'error')
   const warns = plan.problems.filter((p) => p.level === 'warn')
 
@@ -50,6 +51,7 @@ export default function ExportDialog({ onClose }) {
         items,
         packs,
         exportMode,
+        pedLook,
         ...opts,
         target: desktop ? opts.target : 'zip',
         onProgress: (text, frac) => {
@@ -135,6 +137,15 @@ export default function ExportDialog({ onClose }) {
                   </div>
                 ))}
               </div>
+              <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-md border border-ink-800 bg-ink-950 px-3 py-2 text-xs text-ink-200">
+                <input type="checkbox" className="mt-0.5" checked={opts.lockPeds !== false} onChange={(e) => setOpt({ lockPeds: e.target.checked })} />
+                <span>
+                  {t('Lås peden till utseendet i 3D-vyn')}
+                  <span className="mt-0.5 block text-[11px] leading-relaxed text-ink-500">
+                    {t('Ansiktet, frisyren och kläderna du valt i Ped-menyn – eller de du ändrat – blir pedens enda, så att spelet inte slumpar fram originalet. Stäng av om spelarna ska kunna byta mellan pedens varianter.')}
+                  </span>
+                </span>
+              </label>
               <p className="mt-1.5 text-[11px] leading-relaxed text-ink-500">{t('Hela peden följer med, med dina ändringar. Addon-peds får även peds.meta. Ta bort pedens gamla resurs från servern så att de inte krockar.')}</p>
             </div>
           )}
@@ -246,7 +257,7 @@ export default function ExportDialog({ onClose }) {
             <Button variant="ghost" onClick={onClose} disabled={!!busy}>
               {t('Avbryt')}
             </Button>
-            <Button variant="primary" onClick={run} disabled={!!busy || errors.length > 0 || !items.length || (!desktop && exportMode === 'addon')}>
+            <Button variant="primary" onClick={run} disabled={!!busy || errors.length > 0 || (!items.length && !plan.pedBundles.length) || (!desktop && exportMode === 'addon')}>
               {busy ? t('Exporterar…') : desktop && opts.target === 'folder' ? t('Exportera till mapp…') : t('Spara .zip…')}
             </Button>
           </div>

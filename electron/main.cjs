@@ -589,6 +589,21 @@ ipcMain.handle('ymt:toXml', async (_e, data) => {
   }
 })
 
+// Döper om modeller (.ydd) eller texturer (.ytd) inuti en ped-fil: renames = [{ from, to }], to = '' tar bort.
+ipcMain.handle('ped:renameInFile', async (_e, { kind, data, renames }) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-ren-'))
+  try {
+    const [inp, out, map] = ['in', 'out', 'map.json'].map((f) => path.join(dir, f))
+    fs.writeFileSync(inp, Buffer.from(data))
+    fs.writeFileSync(map, JSON.stringify(renames))
+    fs.writeFileSync(path.join(dir, 'jobs.txt'), `rename|${kind === 'ydd' ? 'ydd' : 'ytd'}|${inp}|${out}|${map}`)
+    await runPs(BUILD_YMT, ['-CodeWalker', codewalkerPath(), '-Jobs', path.join(dir, 'jobs.txt')])
+    return fs.readFileSync(out)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 ipcMain.handle('ymt:build', async (_e, jobs) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-ymt-'))
   try {

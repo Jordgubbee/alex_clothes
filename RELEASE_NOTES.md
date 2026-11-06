@@ -23,6 +23,13 @@ Appen är inte signerad med ett köpt certifikat.
 - **Edge**: ··· vid nedladdningen › Behåll › Visa mer › Behåll ändå. **Chrome**: Ctrl+J › Behåll farlig fil.
 - **Smart App Control** (Windows 11) kan stoppa osignerade program helt. Använd då den portabla versionen eller stäng av Smart App Control under Windows-säkerhet › App- och webbläsarkontroll.
 
+### Nytt i 1.0.10
+- **Ansiktet och kläderna du valt syns in game och i OpenIV** – det du väljer i Ped-menyn på en egen ped följer nu med i exporten. Varianten du valt (eller den du har målat på) blir pedens nr 000/A, som är den spelet och OpenIV visar
+- **Lås peden till utseendet i 3D-vyn** (på som standard) – pedens andra varianter av delarna du valt eller ändrat tas bort, så att spelet inte slumpar fram originalansiktet. Stäng av i exportfönstret om spelarna ska kunna byta mellan pedens varianter
+- Fungerar både på peds med en fil per plagg och på peds med allt i en fil (t.ex. `s_m_y_cop_01`)
+- En ped följer med i exporten även om du bara har ändrat dess utseende i Ped-menyn
+- **Rättat:** exporten kunde krascha för peds med allt i en fil efter att projektet öppnats igen
+
 ### Nytt i 1.0.9
 - **Egna peds fungerar in game** – exporten lägger nu med hela peden (`.yft`, `.ydd`, `.ytd`, `.ymt`, props) med dina ändringar, i stället för bara de ändrade filerna. Det gör också att du kan öppna hela resultatet i OpenIV
 - **Addon-peds får `peds.meta`** och `PED_METADATA_FILE` i fxmanifest automatiskt (pedens egen `peds.meta` används om den fanns)

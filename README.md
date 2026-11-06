@@ -46,7 +46,7 @@ Varningarna kommer för att appen inte är signerad med ett köpt certifikat, in
    - **Passa in** nere till vänster i 3D-vyn: dra i handtagen för att flytta, rotera och skala plagget på peden. Under **Passform i 3D** finns exakta reglage och **Blås upp** mot klippning.
    - **Spara i modellen (för spelet)** bygger in passformen i `.ydd`:n, så plagget sitter likadant i FiveM.
    - **Öppna i Blender** öppnar plagget med freemode-skelettet för större ändringar. Den rättade `.ydd`:n kommer tillbaka automatiskt.
-   - **Pedens utseende:** menyn **Ped** i 3D-vyn byter ansikte, frisyr och kläder (nummer och färg) på peden. På freemode-gubbarna hämtas de ur ditt GTA första gången du väljer dem; på egna peds väljs bland pedens egna varianter. Påverkar bara 3D-vyn, inte exporten.
+   - **Pedens utseende:** menyn **Ped** i 3D-vyn byter ansikte, frisyr och kläder (nummer och färg) på peden. På freemode-gubbarna hämtas de ur ditt GTA första gången du väljer dem; på egna peds väljs bland pedens egna varianter. På egna peds följer utseendet med i exporten: valt ansikte/plagg blir pedens nr 000/A, och med **Lås peden till utseendet i 3D-vyn** tas pedens andra varianter av de delarna bort, så att spelet inte slumpar fram originalet. På freemode-gubbarna påverkar menyn bara 3D-vyn.
    - **Dölj delar:** dubbelklicka på t.ex. ansiktet, eller välj **Dold** i Ped-menyn. Ett eget plagg i samma del (t.ex. ett eget huvud) ersätter pedens automatiskt.
 7. **Exportera till FiveM:**
    - **Addon-paket** (rekommenderas) ger varje paket och kön egna filer:

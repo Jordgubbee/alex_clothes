@@ -23,6 +23,14 @@ Appen är inte signerad med ett köpt certifikat.
 - **Edge**: ··· vid nedladdningen › Behåll › Visa mer › Behåll ändå. **Chrome**: Ctrl+J › Behåll farlig fil.
 - **Smart App Control** (Windows 11) kan stoppa osignerade program helt. Använd då den portabla versionen eller stäng av Smart App Control under Windows-säkerhet › App- och webbläsarkontroll.
 
+### Nytt i 1.0.11
+- **Byt huvud på en ped med allt i en fil** (t.ex. lägg in ett freemode-huvud på en addon-ped): huvudet byggs in i pedens egna `.ydd`, `.ytd` och `.ymt` och kopplas om till pedens skelett i Blender, så att det sitter rätt in game
+- **Händerna följer med** – peds som har händerna i huvudmodellen får dem som en egen del (Händer) när huvudet byts, både i exporten och i 3D-vyn
+- **Behåll det gamla huvudet** – stäng av låset i exportfönstret, så läggs det nya huvudet till som nästa nummer och du kan byta mellan gammalt och nytt i FiveM
+- **Pedens namn i exporten** – en egen ped får resursens namn (t.ex. `ban3` → `ban3.ydd`, `ban3.yft` och `peds.meta`), eller det namn du skriver under Egna peds
+- **3D-vyn rättad** för peds med allt i en fil: bara en variant per del visas, med rätt texturer
+- Ansiktets ben följer huvudet på inlagda huvuden, så att ansiktet inte dras snett
+
 ### Nytt i 1.0.10
 - **Ansiktet och kläderna du valt syns in game och i OpenIV** – det du väljer i Ped-menyn på en egen ped följer nu med i exporten. Varianten du valt (eller den du har målat på) blir pedens nr 000/A, som är den spelet och OpenIV visar
 - **Lås peden till utseendet i 3D-vyn** (på som standard) – pedens andra varianter av delarna du valt eller ändrat tas bort, så att spelet inte slumpar fram originalansiktet. Stäng av i exportfönstret om spelarna ska kunna byta mellan pedens varianter

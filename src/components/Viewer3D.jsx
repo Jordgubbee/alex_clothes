@@ -20,6 +20,64 @@ import { ensureTextures } from '../lib/loader'
 // GTA:s freemode-gubbe har sin rot vid höften, ungefär en meter över fötterna.
 const GTA_ROOT_HEIGHT = 1.0
 
+// GTA:s namn-hash (joaat). Modellerna i en peds .ydd heter bara så: hash_57AFF7FB = uppr_000_r.
+function joaat(s) {
+  let h = 0
+  for (const ch of s.toLowerCase()) {
+    h = (h + ch.charCodeAt(0)) >>> 0
+    h = (h + (h << 10)) >>> 0
+    h = (h ^ (h >>> 6)) >>> 0
+  }
+  h = (h + (h << 3)) >>> 0
+  h = (h ^ (h >>> 11)) >>> 0
+  return (h + (h << 15)) >>> 0
+}
+let HASH_PARTS = null
+function partFromName(name) {
+  const plain = String(name || '').toLowerCase().match(/^([a-z_]+?)_(\d{3})(_[ru])?$/)
+  if (plain) return { comp: plain[1], slot: parseInt(plain[2], 10) }
+  const hash = String(name || '').match(/^hash_([0-9a-f]{8})$/i)
+  if (!hash) return null
+  if (!HASH_PARTS) {
+    HASH_PARTS = new Map()
+    const comps = ['head', 'berd', 'hair', 'uppr', 'lowr', 'hand', 'feet', 'teef', 'accs', 'task', 'decl', 'jbib', 'p_head', 'p_eyes', 'p_ears', 'p_lwrist', 'p_rwrist']
+    for (const comp of comps) for (let n = 0; n < 256; n++) for (const sfx of ['_r', '_u', '']) HASH_PARTS.set(joaat(`${comp}_${String(n).padStart(3, '0')}${sfx}`), { comp, slot: n })
+  }
+  return HASH_PARTS.get(parseInt(hash[1], 16)) || null
+}
+// Bara händerna ur en huvudmodell: trianglar längre än 0,3 m från mitten i sidled (samma gräns som exporten).
+function handsGeometry(mesh) {
+  if (mesh.userData.handsGeo !== undefined) return mesh.userData.handsGeo
+  const geo = mesh.userData.fullGeo || mesh.geometry
+  mesh.userData.fullGeo = geo
+  const pos = geo.attributes.position
+  const idx = geo.index ? geo.index.array : Array.from({ length: pos.count }, (_, i) => i)
+  const keep = []
+  for (let i = 0; i + 2 < idx.length; i += 3) {
+    const a = idx[i], b = idx[i + 1], c = idx[i + 2]
+    if (Math.abs(pos.getX(a)) > 0.3 && Math.abs(pos.getX(b)) > 0.3 && Math.abs(pos.getX(c)) > 0.3) keep.push(a, b, c)
+  }
+  let hands = null
+  if (keep.length) {
+    hands = new THREE.BufferGeometry()
+    for (const [k, v] of Object.entries(geo.attributes)) hands.setAttribute(k, v)
+    hands.setIndex(keep)
+    hands.boundingSphere = geo.boundingSphere
+    hands.boundingBox = geo.boundingBox
+  }
+  mesh.userData.handsGeo = hands
+  return hands
+}
+
+// Närmaste förälder som är en av pedens modeller.
+function drawablePart(mesh) {
+  for (let o = mesh.parent; o; o = o.parent) {
+    const p = partFromName(o.name)
+    if (p) return { ...p }
+  }
+  return null
+}
+
 async function loadModel(file) {
   const ext = extOf(file.name)
   const buf = await file.arrayBuffer()
@@ -237,9 +295,12 @@ export default function Viewer3D() {
         const byName = new Map((pedTextures[gender] || []).map((t) => [texKey(t.name), t.canvas]))
         obj.traverse((m) => {
           if (!m.isMesh) return
-          // Del och nummer ur materialnamnet (uppr_diff_000_a_whi) – används för peds med alla delar i en fil.
-          const part = texKey(m.material?.name || '').match(/^([a-z_]+?)_diff_(\d{3})/)
-          if (part) m.userData.part = { comp: part[1], slot: parseInt(part[2], 10) }
+          // Del och nummer – används för peds med alla delar i en fil. Säkrast ur modellens namn (hash_57AFF7FB =
+          // uppr_000_r), annars ur materialnamnet (uppr_diff_000_a_whi), som inte alltid stämmer på egna peds.
+          const named = drawablePart(m)
+          const part = named ? null : texKey(m.material?.name || '').match(/^([a-z_]+?)_diff_(\d{3})/)
+          if (named) m.userData.part = named
+          else if (part) m.userData.part = { comp: part[1], slot: parseInt(part[2], 10) }
           const canvas = byName.get(texKey(m.material?.name || ''))
           const map = canvas ? new THREE.CanvasTexture(canvas) : m.material?.map || null
           if (map) map.wrapS = map.wrapT = THREE.RepeatWrapping
@@ -383,7 +444,18 @@ export default function Viewer3D() {
     const covered = new Set(shownCats)
     const off = new Set([...shownCats, ...Object.entries(look).filter(([, ch]) => ch && (ch.slot < 0 || !custom)).map(([comp]) => comp)])
     c.ped.traverse((m) => {
-      if (m.isMesh && m.userData.part) m.visible = m.userData.slotVisible !== false && !off.has(m.userData.part.comp)
+      if (!m.isMesh || !m.userData.part) return
+      const comp = m.userData.part.comp
+      m.visible = m.userData.slotVisible !== false && !off.has(comp)
+      if (m.userData.fullGeo) m.geometry = m.userData.fullGeo
+      // Peds med händerna i huvudet: när ett eget huvud visas ligger händerna kvar (som i exporten).
+      if (custom && comp === 'head' && covered.has('head') && m.userData.slotVisible !== false && look.head?.slot !== -1) {
+        const hands = handsGeometry(m)
+        if (hands) {
+          m.geometry = hands
+          m.visible = true
+        }
+      }
     })
     c.lookGroup.visible = showBody
     for (const [comp, part] of c.lookParts) if (part.obj) part.obj.visible = !covered.has(comp)

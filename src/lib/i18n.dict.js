@@ -449,6 +449,11 @@ const E = {
   "Följer med i exporten: peden får det här utseendet in game och i OpenIV.": ["Følger med i eksporten: peden får dette utseendet in game og i OpenIV.","Kommer med i eksporten: peden får dette udseende in game og i OpenIV.","Mukana viennissä: ped saa tämän ulkonäön pelissä ja OpenIV:ssä.","Included in the export: the ped gets this look in game and in OpenIV."],
   "Påverkar bara 3D-vyn. Freemode-ansiktet väljs i serverns klädmeny.": ["Påvirker bare 3D-visningen. Freemode-ansiktet velges i serverens klesmeny.","Påvirker kun 3D-visningen. Freemode-ansigtet vælges i serverens tøjmenu.","Vaikuttaa vain 3D-näkymään. Freemode-kasvot valitaan palvelimen vaatevalikossa.","Only affects the 3D view. The freemode face is chosen in the server's clothing menu."],
   "Hittar inte {f}. Lägg till peden igen under Inställningar › Egna peds.": ["Finner ikke {f}. Legg til peden igjen under Innstillinger › Egne peds.","Kan ikke finde {f}. Tilføj peden igen under Indstillinger › Egne peds.","{f} ei löydy. Lisää ped uudelleen kohdassa Asetukset › Omat pedit.","Can't find {f}. Add the ped again under Settings › Custom peds."],
+  "Bygger in {f}…": ["Bygger inn {f}…","Bygger {f} ind…","Rakennetaan sisään {f}…","Building in {f}…"],
+  "Flyttar händerna…": ["Flytter hendene…","Flytter hænderne…","Siirretään kädet…","Moving the hands…"],
+  "Pedens namn i spelet": ["Pedens navn i spillet","Pedens navn i spillet","Pedin nimi pelissä","The ped's name in game"],
+  "Alla filer och peds.meta får namnet {n}. Spawna peden med {n} in game.": ["Alle filer og peds.meta får navnet {n}. Spawn peden med {n} in game.","Alle filer og peds.meta får navnet {n}. Spawn peden med {n} in game.","Kaikki tiedostot ja peds.meta saavat nimen {n}. Spawnaa ped nimellä {n} pelissä.","All files and peds.meta get the name {n}. Spawn the ped with {n} in game."],
+  "Pedens namn \"{n}\" är ogiltigt. Använd bokstäver, siffror och understreck.": ["Pedens navn \"{n}\" er ugyldig. Bruk bokstaver, tall og understrek.","Pedens navn \"{n}\" er ugyldigt. Brug bogstaver, tal og understreg.","Pedin nimi \"{n}\" on virheellinen. Käytä kirjaimia, numeroita ja alaviivaa.","The ped name \"{n}\" is invalid. Use letters, numbers and underscores."],
 }
 
 const LANG_INDEX = { no: 0, da: 1, fi: 2, en: 3 }

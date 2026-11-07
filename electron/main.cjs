@@ -604,6 +604,80 @@ ipcMain.handle('ped:renameInFile', async (_e, { kind, data, renames }) => {
   }
 })
 
+// Bygger in ett eget plagg i en ped med allt i en fil: modellen i pedens .ydd, texturerna i pedens .ytd.
+// ydd: { data, source, name }  ytd: { data, remove, add: [{ data, name }] }
+// Händerna ur en peds huvudmodell (vissa peds har händerna i huvudet): plockar ut modellen och tar bort
+// allt nära mitten (ansikte, hals) i Blender, så att bara händerna blir kvar. Returnerar en .ydd eller null.
+ipcMain.handle('ped:handsFromHead', async (_e, { model, data, name }) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-hand-'))
+  try {
+    const inp = path.join(dir, 'in.ydd')
+    const part = path.join(dir, `${name}.ydd`)
+    fs.writeFileSync(inp, Buffer.from(data))
+    fs.writeFileSync(path.join(dir, 'jobs.txt'), `extract|${inp}|${part}|${name}`)
+    await runPs(BUILD_YMT, ['-CodeWalker', codewalkerPath(), '-Jobs', path.join(dir, 'jobs.txt')])
+    const yft = path.join(CUSTOM_PEDS, safeId(model), `${safeId(model)}.yft`)
+    const files = [part, ...(fs.existsSync(yft) ? [yft] : [])]
+    const out = await runBridge(['hands', path.join(dir, 'out'), ...files])
+    return out && fs.existsSync(out) ? fs.readFileSync(out) : null
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// Flyttar ett plagg (t.ex. ett freemode-huvud) till en egen peds skelett i Blender, så att benen stämmer
+// in game. data: pedens .ydd, name: en av pedens modeller att koppla till, source: plaggets .ydd.
+ipcMain.handle('ped:reskin', async (_e, { model, data, name, source }) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-rsk-'))
+  try {
+    const [a, b] = ['src', 'ped'].map((d) => path.join(dir, d))
+    fs.mkdirSync(a)
+    fs.mkdirSync(b)
+    const fm = path.join(PEDS, 'gta_files', PED_MODELS.male, `${PED_MODELS.male}.yft`)
+    const yft = path.join(CUSTOM_PEDS, safeId(model), `${safeId(model)}.yft`)
+    if (!fs.existsSync(fm) || !fs.existsSync(yft)) throw new Error('Hittar inte skeletten (.yft) för att koppla om modellen.')
+    fs.copyFileSync(fm, path.join(a, path.basename(fm)))
+    fs.writeFileSync(path.join(a, 'part.ydd'), Buffer.from(source))
+    fs.copyFileSync(yft, path.join(b, path.basename(yft)))
+    fs.writeFileSync(path.join(dir, 'ped.ydd'), Buffer.from(data))
+    fs.writeFileSync(path.join(dir, 'jobs.txt'), `extract|${path.join(dir, 'ped.ydd')}|${path.join(b, `${name}.ydd`)}|${name}`)
+    await runPs(BUILD_YMT, ['-CodeWalker', codewalkerPath(), '-Jobs', path.join(dir, 'jobs.txt')])
+    const out = await runBridge(['reskin', path.join(dir, 'out'), path.join(b, `${name}.ydd`), path.join(a, 'part.ydd')])
+    return fs.readFileSync(out)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+ipcMain.handle('ped:inject', async (_e, { kind, data, source, name, remove, add, copy }) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-inj-'))
+  try {
+    const target = path.join(dir, 'target')
+    const out = path.join(dir, 'out')
+    fs.writeFileSync(target, Buffer.from(data))
+    let job
+    if (kind === 'ydd') {
+      const src = path.join(dir, 'source.ydd')
+      fs.writeFileSync(src, Buffer.from(source))
+      job = `inject|ydd|${target}|${src}|${out}|${name}`
+    } else {
+      const files = add.map((a, i) => {
+        const p = path.join(dir, `add${i}.ytd`)
+        fs.writeFileSync(p, Buffer.from(a.data))
+        return { file: p, name: a.name }
+      })
+      const spec = path.join(dir, 'spec.json')
+      fs.writeFileSync(spec, JSON.stringify({ remove: String(remove || '').toLowerCase(), add: files, copy: copy || [] }))
+      job = `inject|ytd|${target}|${out}|${spec}`
+    }
+    fs.writeFileSync(path.join(dir, 'jobs.txt'), job)
+    await runPs(BUILD_YMT, ['-CodeWalker', codewalkerPath(), '-Jobs', path.join(dir, 'jobs.txt')])
+    return fs.readFileSync(out)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 ipcMain.handle('ymt:build', async (_e, jobs) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-ymt-'))
   try {

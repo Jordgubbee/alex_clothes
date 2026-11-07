@@ -38,7 +38,9 @@ export default function ExportDialog({ onClose }) {
   }
   const [showFiles, setShowFiles] = useState(null)
 
-  const plan = useMemo(() => planExport({ items, packs, exportMode, layout: opts.layout, lowercase: opts.lowercase, pedLook }), [items, packs, exportMode, opts.layout, opts.lowercase, pedLook, t])
+  // Pedens namn i exporten: tomt = resursens namn (en ped) eller pedens eget.
+  const [pedNames, setPedNames] = useState({})
+  const plan = useMemo(() => planExport({ items, packs, exportMode, layout: opts.layout, lowercase: opts.lowercase, pedLook, pedNames, projectName }), [items, packs, exportMode, opts.layout, opts.lowercase, pedLook, pedNames, projectName, t])
   const errors = plan.problems.filter((p) => p.level === 'error')
   const warns = plan.problems.filter((p) => p.level === 'warn')
 
@@ -53,6 +55,7 @@ export default function ExportDialog({ onClose }) {
         exportMode,
         pedLook,
         ...opts,
+        pedNames,
         target: desktop ? opts.target : 'zip',
         onProgress: (text, frac) => {
           setBusy(text)
@@ -131,9 +134,20 @@ export default function ExportDialog({ onClose }) {
               <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-400">{t('Egna peds')}</div>
               <div className="space-y-1">
                 {plan.pedBundles.map((b) => (
-                  <div key={b.dir} className="flex items-center justify-between rounded-md border border-ink-800 bg-ink-950 px-3 py-2 text-xs">
-                    <span className="font-mono text-ink-200">{b.dir}/</span>
-                    <span className="text-ink-400">{t('hela peden: .yft, .ydd, .ytd, .ymt')}</span>
+                  <div key={b.dir} className="space-y-1.5 rounded-md border border-ink-800 bg-ink-950 px-3 py-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-ink-200">stream/{opts.lowercase ? b.name.toLowerCase() : b.name}/</span>
+                      <span className="text-ink-400">{t('hela peden: .yft, .ydd, .ytd, .ymt')}</span>
+                    </div>
+                    <label className="flex items-center gap-2 text-ink-400">
+                      <span className="shrink-0">{t('Pedens namn i spelet')}</span>
+                      <input
+                        value={pedNames[b.model] ?? b.name}
+                        onChange={(e) => setPedNames({ ...pedNames, [b.model]: e.target.value.replace(/[^A-Za-z0-9_]/g, '') })}
+                        className="h-7 min-w-0 flex-1 rounded border border-ink-700 bg-ink-900 px-2 font-mono text-[12px] text-ink-100"
+                      />
+                    </label>
+                    {b.name !== b.model && <p className="text-[11px] leading-relaxed text-ink-500">{t('Alla filer och peds.meta får namnet {n}. Spawna peden med {n} in game.', { n: b.name })}</p>}
                   </div>
                 ))}
               </div>

@@ -41,7 +41,7 @@ function compoundPatches(items, L) {
   return [...map.values()]
 }
 
-export function planExport({ items, packs, exportMode, layout = 'packs', lowercase = false, pedLook = {} }) {
+export function planExport({ items, packs, exportMode, layout = 'packs', lowercase = false, pedLook = {}, pedNames = {}, projectName = '' }) {
   const L = (p) => (lowercase ? p.toLowerCase() : p)
   const problems = []
   const err = (text) => problems.push({ level: 'error', text })
@@ -68,14 +68,19 @@ export function planExport({ items, packs, exportMode, layout = 'packs', lowerca
   // Egna peds exporteras som en hel ped: alla pedens filer följer med, med dina ändringar.
   // Peden följer med när den har plagg i projektet eller när du valt dess utseende i Ped-menyn.
   const lookPeds = Object.entries(pedLook).filter(([g, l]) => isCustomPed(g) && Object.keys(l || {}).length).map(([g]) => g)
+  // En enda egen ped i exporten får resursens namn (ban3 → ban3.ydd …), om du inte skrivit ett eget.
+  const oneCustomPed = new Set([...items.filter((i) => isCustomPed(i.gender)).map((i) => i.gender), ...lookPeds]).size === 1
   const pedBundles = [...new Set([...items.filter((i) => isCustomPed(i.gender)).map((i) => i.gender), ...lookPeds])].map((gender) => ({
     gender,
     model: PEDS[gender].model,
     dir: L(`stream/${PEDS[gender].model}`),
+    // Nytt namn på peden i exporten (filerna och peds.meta), annars pedens eget.
+    name: (pedNames[PEDS[gender].model] || '').trim() || (oneCustomPed && projectName ? projectName.replace(/[^A-Za-z0-9_]/g, '_') : PEDS[gender].model),
     items: items.filter((i) => i.gender === gender),
     look: pedLook[gender] || {},
   }))
   for (const b of pedBundles) {
+    if (!/^[A-Za-z0-9_]{2,40}$/.test(b.name)) err(t('Pedens namn "{n}" är ogiltigt. Använd bokstäver, siffror och understreck.', { n: b.name }))
     const hidden = Object.entries(b.look).filter(([, ch]) => ch?.slot < 0).map(([k]) => k)
     if (hidden.length) warn(t('{p}: dolda delar ({d}) går inte att ta bort från peden in game – de syns ändå.', { p: b.model, d: hidden.join(', ') }))
   }
@@ -214,9 +219,9 @@ ${packList.map((p) => `  ${p.dds}  ->  ${p.ytd}`).join('\n')}
  * 'data' = returnera zip-datan (för tester).
  * onProgress(text, andel 0–1).
  */
-export async function exportResource({ projectName, items, packs, exportMode, layout = 'packs', lowercase = false, pedLook = {}, lockPeds = true, target = 'zip', onProgress }) {
+export async function exportResource({ projectName, items, packs, exportMode, layout = 'packs', lowercase = false, pedLook = {}, pedNames = {}, lockPeds = true, target = 'zip', onProgress }) {
   if (lowercase) projectName = projectName.toLowerCase()
-  const plan = planExport({ items, packs, exportMode, layout, lowercase, pedLook })
+  const plan = planExport({ items, packs, exportMode, layout, lowercase, pedLook, pedNames, projectName })
   if (plan.problems.some((p) => p.level === 'error')) throw new Error(t('Rätta felen först.'))
   // Bara texturer som inte kan kopieras rakt av behöver avkodas – resten går snabbt.
   const needPixels = items.filter((i) => i.textures.some((x) => !x.canvas && !(x.original && !x.edited)))
@@ -317,7 +322,7 @@ export async function exportResource({ projectName, items, packs, exportMode, la
   const pedMetas = []
   for (const bundle of plan.pedBundles || []) {
     onProgress?.(t('Lägger till {p}…', { p: bundle.model }), 0.84)
-    const { meta } = await bundlePed({ root, dir: bundle.dir, gender: bundle.gender, items: bundle.items, look: bundle.look, lock: lockPeds, written, lowercase, onProgress: (text) => onProgress?.(text, 0.84) })
+    const { meta } = await bundlePed({ root, dir: bundle.dir, gender: bundle.gender, items: bundle.items, look: bundle.look, lock: lockPeds, written, lowercase, newName: bundle.name, onProgress: (text) => onProgress?.(text, 0.84) })
     if (meta) pedMetas.push(meta)
   }
   if (pedMetas.length) root.file('peds.meta', pedsMetaFile(pedMetas))

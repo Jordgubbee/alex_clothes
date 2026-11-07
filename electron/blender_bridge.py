@@ -447,6 +447,101 @@ def cmd_fit(ydd, out_dir, spec_path):
     ok(os.path.join(out_dir, out[0]))
 
 
+def cmd_hands(out_dir, inputs):
+    """Behåller bara händerna i en huvudmodell (för peds som har händerna i huvudet): allt som ligger
+    närmare mitten än 0,3 m i sidled (ansikte, hals) tas bort i alla LOD:er."""
+    import bmesh
+    import json
+    clear_scene()
+    import_files(inputs)
+    kept = 0
+    done = set()
+    for obj in [o for o in bpy.data.objects if o.type == "MESH"]:
+        if getattr(obj, "sollum_type", "").startswith("sollumz_bound"):
+            continue
+        for mesh in lod_meshes(obj):
+            if mesh.name in done:
+                continue
+            done.add(mesh.name)
+            bm = bmesh.new()
+            bm.from_mesh(mesh)
+            mw = obj.matrix_world
+            gone = [v for v in bm.verts if abs((mw @ v.co).x) < 0.3]
+            bmesh.ops.delete(bm, geom=gone, context="VERTS")
+            kept += len(bm.verts)
+            bm.to_mesh(mesh)
+            bm.free()
+            mesh.update()
+    if not kept:
+        ok("")
+        return
+    os.makedirs(out_dir, exist_ok=True)
+    res = bpy.ops.sollumz.export_assets(directory=out_dir + os.sep, direct_export=True, limit_to_selected=False, **PED_EXPORT)
+    out = [f for f in os.listdir(out_dir) if f.lower().endswith(".ydd")]
+    if "FINISHED" not in res or not out:
+        raise RuntimeError("Sollumz kunde inte spara händerna.")
+    print("ALEX_INFO " + json.dumps({"verts": kept}), flush=True)
+    ok(os.path.join(out_dir, out[0]))
+
+
+def import_one(path):
+    """Läser in en .ydd med skelettet (.yft) som ligger i samma mapp. Returnerar de nya objekten."""
+    before = set(bpy.data.objects)
+    res = bpy.ops.sollumz.import_assets(directory=os.path.dirname(path) + os.sep, files=[{"name": os.path.basename(path)}],
+                                        use_custom_settings=True, dwd_import_external_skeleton="FROM_DIR", textures_mode="PACK")
+    if "FINISHED" not in res:
+        raise RuntimeError(f"Sollumz kunde inte läsa {os.path.basename(path)}")
+    return set(bpy.data.objects) - before
+
+
+def cmd_reskin(out_dir, target, source):
+    """Flyttar en modell (t.ex. ett freemode-huvud) till en annan peds skelett. target: en av pedens egna
+    modeller med pedens .yft i samma mapp, source: modellen med sitt skelett (.yft) i samma mapp.
+    Viktningen följer benens namn, så ben-numren blir rätt för peden."""
+    import json
+    clear_scene()
+    tgt = import_one(target)
+    src = import_one(source)
+    drawable = next((o for o in tgt if getattr(o, "sollum_type", "") == "sollumz_drawable"), None)
+    if not drawable:
+        raise RuntimeError("Hittade ingen modell att koppla till i peden.")
+    for o in [o for o in tgt if o.type == "MESH"]:
+        bpy.data.objects.remove(o)
+    meshes = [o for o in src if o.type == "MESH" and not getattr(o, "sollum_type", "").startswith("sollumz_bound")]
+    if not meshes:
+        raise RuntimeError("Hittade ingen mesh i modellen.")
+    bones = {b.name for b in drawable.data.bones} if drawable.type == "ARMATURE" else set()
+    for o in meshes:
+        # Ansiktets ben (FB_*, FACIAL_*) sitter på andra ställen i en annan peds skelett och drar ansiktet
+        # snett in game. Deras viktning – och viktning mot ben som peden saknar – flyttas till huvudbenet.
+        head = o.vertex_groups.get("SKEL_Head") or o.vertex_groups.new(name="SKEL_Head")
+        moved = [g for g in o.vertex_groups if g.name != "SKEL_Head" and (g.name.upper().startswith(("FB_", "FACIAL")) or (bones and g.name not in bones))]
+        if moved:
+            idx = {g.index for g in moved}
+            for v in o.data.vertices:
+                w = sum(e.weight for e in v.groups if e.group in idx)
+                if w > 0:
+                    head.add([v.index], w, "ADD")
+            for g in moved:
+                o.vertex_groups.remove(g)
+        mw = o.matrix_world.copy()
+        o.parent = drawable
+        o.matrix_world = mw
+        for m in o.modifiers:
+            if m.type == "ARMATURE":
+                m.object = drawable
+    for o in [o for o in src if o.type != "MESH" or o not in meshes]:
+        if o.name in bpy.data.objects:
+            bpy.data.objects.remove(o)
+    os.makedirs(out_dir, exist_ok=True)
+    res = bpy.ops.sollumz.export_assets(directory=out_dir + os.sep, direct_export=True, limit_to_selected=False, **PED_EXPORT)
+    out = [f for f in os.listdir(out_dir) if f.lower().endswith(".ydd")]
+    if "FINISHED" not in res or not out:
+        raise RuntimeError("Sollumz kunde inte spara modellen.")
+    print("ALEX_INFO " + json.dumps({"meshes": len(meshes)}), flush=True)
+    ok(os.path.join(out_dir, out[0]))
+
+
 def cmd_materials(ydd):
     """Listar diffuse-texturerna som modellen använder."""
     import json
@@ -562,6 +657,12 @@ def main():
         elif mode == "fit":
             enable_sollumz()
             cmd_fit(ARGS[1], ARGS[2], ARGS[3])
+        elif mode == "reskin":
+            enable_sollumz()
+            cmd_reskin(ARGS[1], ARGS[2], ARGS[3])
+        elif mode == "hands":
+            enable_sollumz()
+            cmd_hands(ARGS[1], ARGS[2:])
         elif mode == "materials":
             enable_sollumz()
             cmd_materials(ARGS[1])

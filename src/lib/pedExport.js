@@ -264,6 +264,33 @@ export function applyLookToYmt(xml, ops) {
   return new XMLSerializer().serializeToString(doc)
 }
 
+// Texturens hudton i namnet (head_diff_000_a_whi) ↔ texId i .ymt.
+const TEX_IDS = ['uni', 'whi', 'bla', 'chi', 'lat', 'ara', 'bal', 'jap', 'kor', 'ita', 'pak']
+
+/**
+ * Ett eget plagg som ersätter delens nr 000 i .ymt: rätt _r/_u (propMask) och en färg per textur.
+ * Delen skapas om peden inte hade den.
+ */
+// slot: vilket nummer plagget får (0 = ersätter pedens första, ett nummer efter pedens sista = läggs till).
+export function setYmtDrawable(xml, key, { skin, textures, suffix, slot = 0 }) {
+  const doc = parse(xml)
+  const comps = ymtComps(doc)
+  const id = COMP_KEYS.indexOf(key)
+  let comp = comps.get(id)
+  if (!comp) {
+    comp = fragment(doc, `<Item><numAvailTex value="0" /><aDrawblData3 itemType="CPVDrawblData"></aDrawblData3></Item>`)
+    comps.set(id, comp)
+  }
+  const list = child(comp, 'aDrawblData3')
+  const texId = Math.max(0, TEX_IDS.indexOf(suffix || (skin ? 'whi' : 'uni')))
+  const next = fragment(doc, DRAWABLE(Math.max(1, textures), skin).replace(/<texId value="\d+" \/>/g, `<texId value="${texId}" />`))
+  const at = kids(list, 'Item')[slot]
+  if (at) list.replaceChild(next, at)
+  else list.appendChild(next)
+  finishYmt(doc, comps)
+  return new XMLSerializer().serializeToString(doc)
+}
+
 // Omdöpningar inuti en ped med allt i en fil: modellerna (head_001_r) och färgtexturerna i .ytd.
 // Modeller tas aldrig bort här – .ymt bestämmer vilka spelet använder.
 function compoundRenames(ops, layout, textureNames) {
@@ -284,12 +311,18 @@ function compoundRenames(ops, layout, textureNames) {
 }
 
 // peds.meta för en addon-ped: pedens egen post om den fanns, annars en vanlig människo-ped.
-export function pedsMetaItem(model, original, hasProps) {
+export function pedsMetaItem(model, original, hasProps, newName = model) {
   if (original) {
     try {
       const doc = parse(original)
       const own = [...doc.querySelectorAll('InitDatas > Item')].find((el) => child(el, 'Name')?.textContent.trim().toLowerCase() === model.toLowerCase())
-      if (own) return new XMLSerializer().serializeToString(own)
+      if (own) {
+        // Nytt namn: pedens post följer med, med det nya namnet (och props-namnet).
+        child(own, 'Name').textContent = newName
+        const props = child(own, 'PropsName')
+        if (props && props.textContent.trim().toLowerCase() === `${model.toLowerCase()}_p`) props.textContent = `${newName}_p`
+        return new XMLSerializer().serializeToString(own)
+      }
     } catch {
       // En trasig peds.meta ersätts av standardposten nedan.
     }
@@ -297,8 +330,8 @@ export function pedsMetaItem(model, original, hasProps) {
   const f = /^[a-z]+_f_/i.test(model)
   const g = f ? 'F' : 'M'
   return `<Item>
-      <Name>${model}</Name>
-      <PropsName>${hasProps ? `${model}_p` : 'null'}</PropsName>
+      <Name>${newName}</Name>
+      <PropsName>${hasProps ? `${newName}_p` : 'null'}</PropsName>
       <ClipDictionaryName>move_${g.toLowerCase()}@generic</ClipDictionaryName>
       <BlendShapeFileName>null</BlendShapeFileName>
       <ExpressionSetName>expr_set_ambient_${f ? 'female' : 'male'}</ExpressionSetName>
@@ -386,7 +419,7 @@ const toArrayBuffer = (d) => (d instanceof ArrayBuffer ? d : d.buffer.slice(d.by
  * look: valen i Ped-menyn. lock: ta bort pedens andra varianter av delarna, så att spelet visar just det.
  * Returnerar { meta (posten till peds.meta för addon-peds, annars null), hidden (delar som inte kan döljas) }.
  */
-export async function bundlePed({ root, dir, gender, items, look = {}, lock = true, written, lowercase = false, onProgress }) {
+export async function bundlePed({ root, dir, gender, items, look = {}, lock = true, written, lowercase = false, newName = null, onProgress }) {
   const L = (p) => (lowercase ? p.toLowerCase() : p)
   const model = PEDS[gender].model
   const files = await desktop.customPedFiles(model)
@@ -404,6 +437,23 @@ export async function bundlePed({ root, dir, gender, items, look = {}, lock = tr
     root.remove(w.path)
   }
 
+  // Ped med allt i en fil: egna plagg (t.ex. ett freemode-huvud) byggs in i pedens .ydd/.ytd som delens nr 000.
+  const inject = new Map()
+  if (compound) {
+    for (const it of items.filter((i) => !i.compound && i.ydd && !categoryByKey(i.category)?.prop)) {
+      const n = pad(it.slot)
+      const all = [...final.values()]
+      const model3d = all.find((x) => new RegExp(`^${it.category}_${n}(_[ru])?\\.ydd$`, 'i').test(x.name))
+      if (!model3d) continue
+      const textures = all.filter((x) => new RegExp(`^${it.category}_diff_${n}_[a-z]`, 'i').test(x.name)).sort((a, b) => a.name.localeCompare(b.name))
+      for (const x of [model3d, ...textures]) final.delete(x.name.toLowerCase())
+      const suffix = textures[0]?.name.match(/_diff_\d{3}_[a-z]_([a-z]+)/i)?.[1]?.toLowerCase() || (it.skin ? 'whi' : 'uni')
+      const skin = /_r\.ydd$/i.test(model3d.name) || (!/_u\.ydd$/i.test(model3d.name) && !!it.skin)
+      inject.set(it.category, { item: it, model3d, textures, suffix, skin })
+    }
+  }
+  const injected = new Set([...inject.values()].map((x) => x.item))
+
   // .ymt: nya plagg och färgvarianter (peds med en fil per plagg), och valt utseende som 000/A.
   let ops = {}
   let hidden = []
@@ -411,15 +461,45 @@ export async function bundlePed({ root, dir, gender, items, look = {}, lock = tr
   if (ymt) {
     onProgress?.(t('Uppdaterar {f}…', { f: `${model}.ymt` }))
     const original = await desktop.ymtToXml(ymt.data)
-    ;({ ops, hidden } = resolvePedLook({ layout: ymtLayout(original), look, items, lock }))
+    ;({ ops, hidden } = resolvePedLook({ layout: ymtLayout(original), look, items: items.filter((i) => !injected.has(i)), lock }))
+    // Med lås ersätter det egna plagget pedens nr 000 (och de andra tas bort). Utan lås läggs det till
+    // efter pedens egna, så att man kan byta mellan gammalt och nytt in game.
+    const counts = ymtLayout(original)
+    for (const [key, x] of inject) {
+      x.slot = lock ? 0 : counts[key]?.length || 0
+      if (lock) ops[key] = { drawable: 0, letter: 'a', lock }
+    }
     const own = items.filter((i) => !i.compound)
     let xml = (!compound && own.length && patchPedYmt(original, own)) || original
     xml = applyLookToYmt(xml, ops)
+    for (const [key, x] of inject) xml = setYmtDrawable(xml, key, { skin: x.skin, textures: x.textures.length, suffix: x.suffix, slot: x.slot })
+    // Vissa peds har händerna i huvudmodellen. Byts huvudet flyttas händerna till delen Händer (5),
+    // med pedens gamla hudtextur, om peden inte redan använder den delen.
+    const ydd = final.get(`${model.toLowerCase()}.ydd`)
+    const ytd = final.get(`${model.toLowerCase()}.ytd`)
+    if (inject.has('head') && !ymtLayout(original).hand && ydd && ytd) {
+      onProgress?.(t('Flyttar händerna…'))
+      const oldTex = (await readYTD(toArrayBuffer(ytd.data), { decode: false })).map((x) => x.name).find((n) => /^head_diff_000_a/i.test(n))
+      let hands = null
+      for (const name of ['head_000_r', 'head_000_u']) {
+        try {
+          hands = await desktop.handsFromHead({ model, data: ydd.data, name })
+          break
+        } catch {
+          // Prova nästa namn.
+        }
+      }
+      if (hands && oldTex) {
+        const suffix = oldTex.match(/_diff_000_a_([a-z]+)/i)?.[1]?.toLowerCase() || 'whi'
+        inject.get('head').hands = { data: hands, from: oldTex, to: `hand_diff_000_a_${suffix}` }
+        xml = setYmtDrawable(xml, 'hand', { skin: true, textures: 1, suffix })
+      }
+    }
     if (xml !== original) ymt.data = (await desktop.buildYmt([{ name: ymt.name, xml }]))[0].data
   }
 
   // Filerna får de nya numren: valt utseende blir 000/A, låsta delars andra varianter tas bort.
-  if (Object.keys(ops).length) {
+  if (Object.keys(ops).length || inject.size) {
     if (compound) {
       const ydd = final.get(`${model.toLowerCase()}.ydd`)
       const ytd = final.get(`${model.toLowerCase()}.ytd`)
@@ -427,6 +507,28 @@ export async function bundlePed({ root, dir, gender, items, look = {}, lock = tr
       const ren = compoundRenames(ops, null, texNames)
       if (ydd && ren.ydd.length) ydd.data = await desktop.renameInFile('ydd', ydd.data, ren.ydd)
       if (ytd && ren.ytd.length) ytd.data = await desktop.renameInFile('ytd', ytd.data, ren.ytd)
+      for (const [key, x] of inject) {
+        onProgress?.(t('Bygger in {f}…', { f: x.model3d.name }))
+        if (ydd && x.hands) ydd.data = await desktop.injectIntoPed({ kind: 'ydd', data: ydd.data, source: x.hands.data, name: 'hand_000_r' })
+        if (ydd) {
+          // Plaggets ben-numrering hör till freemode-skelettet – koppla om det till pedens skelett i Blender.
+          let source = x.model3d.data
+          for (const name of ['head_000_r', 'head_000_u', 'uppr_000_r', 'uppr_000_u']) {
+            try {
+              source = await desktop.reskinToPed({ model, data: ydd.data, name, source: x.model3d.data })
+              break
+            } catch {
+              // Prova nästa av pedens modeller.
+            }
+          }
+          ydd.data = await desktop.injectIntoPed({ kind: 'ydd', data: ydd.data, source, name: `${key}_${pad(x.slot)}_${x.skin ? 'r' : 'u'}` })
+        }
+        if (ytd && x.textures.length) {
+          const add = x.textures.map((tx, i) => ({ data: tx.data, name: `${key}_diff_${pad(x.slot)}_${LETTERS[i]}_${x.suffix}` }))
+          const copy = x.hands ? [{ from: x.hands.from, to: x.hands.to }] : []
+          ytd.data = await desktop.injectIntoPed({ kind: 'ytd', data: ytd.data, remove: `${key}_diff_${pad(x.slot)}_`, add, copy })
+        }
+      }
     } else {
       const renamed = [...final.values()].map((f) => ({ ...f, name: lookName(f.name, ops) })).filter((f) => f.name)
       final.clear()
@@ -434,7 +536,13 @@ export async function bundlePed({ root, dir, gender, items, look = {}, lock = tr
     }
   }
 
-  for (const f of final.values()) root.file(L(`${dir}/${streamName(model, f.name)}`), f.data)
-  const meta = info.addon ? pedsMetaItem(model, info.pedsMeta, names.some((n) => /^p_|_p\.(ydd|ytd)$/i.test(n))) : null
+  // Nytt namn på peden (t.ex. ben → ban2): filerna och peds.meta får det nya namnet. En omdöpt GTA-ped
+  // blir en ny addon-ped och behöver då också peds.meta.
+  const name = newName && newName !== model ? newName : model
+  const outDir = name === model ? dir : `${dir.slice(0, dir.lastIndexOf('/') + 1)}${name}`
+  const own = (n) => (name === model ? n : n.replace(new RegExp(`^${model}(?=(_p)?\\.)`, 'i'), name))
+  for (const f of final.values()) root.file(L(`${outDir}/${streamName(name, own(f.name))}`), f.data)
+  const hasProps = names.some((n) => /^p_|_p\.(ydd|ytd)$/i.test(n))
+  const meta = info.addon || name !== model ? pedsMetaItem(model, info.pedsMeta, hasProps, name) : null
   return { meta, hidden }
 }
